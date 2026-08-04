@@ -9,6 +9,10 @@ dist/
 *.exe
 /apps/backend/tmp/
 /apps/worker/tmp/
+/apps/backend/api
+/apps/backend/cmd/api/api
+/apps/worker/worker
+/apps/worker/cmd/worker/worker
 
 # Env
 .env
