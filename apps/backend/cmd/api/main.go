@@ -3,13 +3,28 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
 
+	appauth "sonora.dev/go-core/application/auth"
 	"sonora.dev/go-core/config"
+	"sonora.dev/go-core/domain/identity"
+	"sonora.dev/go-core/infrastructure/jwt"
+	"sonora.dev/go-core/infrastructure/oauth"
 	"sonora.dev/go-core/infrastructure/postgres"
+	"sonora.dev/go-core/infrastructure/postgres/repository"
+
+	"sonora.dev/backend/internal/http/handlers"
+	"sonora.dev/backend/internal/http/middleware"
+)
+
+const (
+	accessTokenTTL  = 15 * time.Minute
+	refreshTokenTTL = 30 * 24 * time.Hour
 )
 
 func main() {
@@ -36,14 +51,30 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+	userRepo := repository.NewUserRepository(gormDB)
+	deviceRepo := repository.NewDeviceRepository(gormDB)
+	refreshTokenRepo := repository.NewRefreshTokenRepository(gormDB)
+
+	googleClient := oauth.NewGoogleClient(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GoogleRedirectURL)
+	jwtIssuer := jwt.NewIssuer(cfg.JWTAccessSecret, accessTokenTTL)
+
+	authService := appauth.NewService(userRepo, deviceRepo, refreshTokenRepo, googleClient, jwtIssuer, refreshTokenTTL)
+	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL)
+	deviceHandler := handlers.NewDeviceHandler(authService)
+
+	requireAuth := middleware.RequireAuth(jwtIssuer)
+	requireOwner := middleware.RequireRole(string(identity.RoleOwner))
+
 	app := fiber.New(fiber.Config{
 		AppName: "Sonora API v1",
 	})
 
+	app.Use(requestid.New())
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3000,http://localhost:3001",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowOrigins:     "http://localhost:3000,http://localhost:3001",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowCredentials: true,
 	}))
 
 	// Health check - dipakai Docker Compose healthcheck & CI smoke test
@@ -55,7 +86,17 @@ func main() {
 	})
 
 	api := app.Group("/api/v1")
-	_ = api // route group siap diisi di Task berikutnya (auth, songs, dst)
+
+	authGroup := api.Group("/auth")
+	authGroup.Get("/google", authHandler.GoogleLogin)
+	authGroup.Get("/google/callback", authHandler.GoogleCallback)
+	authGroup.Post("/refresh", authHandler.Refresh)
+	authGroup.Post("/logout", requireAuth, authHandler.Logout)
+	authGroup.Post("/logout-all", requireAuth, requireOwner, authHandler.LogoutAll)
+	authGroup.Get("/me", requireAuth, authHandler.Me)
+
+	api.Get("/devices", requireAuth, deviceHandler.List)
+	api.Delete("/devices/:id", requireAuth, deviceHandler.Delete)
 
 	log.Fatal(app.Listen(":8080"))
 }

@@ -24,6 +24,10 @@ type Config struct {
 	GoogleRedirectURL  string
 
 	StorageCredentialsEncryptionKey string
+
+	// FrontendURL is where the browser gets redirected after the OAuth
+	// callback finishes (access token delivered as a URL fragment).
+	FrontendURL string
 }
 
 // Load reads .env (if present — Docker Compose injects env vars directly and
@@ -42,13 +46,14 @@ func Load() (*Config, error) {
 		GoogleClientSecret:              os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleRedirectURL:               os.Getenv("GOOGLE_REDIRECT_URL"),
 		StorageCredentialsEncryptionKey: os.Getenv("STORAGE_CREDENTIALS_ENCRYPTION_KEY"),
+		FrontendURL:                     envOrDefault("FRONTEND_URL", "http://localhost:3000"),
 	}
 
 	required := map[string]string{
-		"DATABASE_URL":        cfg.DatabaseURL,
-		"REDIS_URL":           cfg.RedisURL,
-		"JWT_ACCESS_SECRET":   cfg.JWTAccessSecret,
-		"JWT_REFRESH_SECRET":  cfg.JWTRefreshSecret,
+		"DATABASE_URL":       cfg.DatabaseURL,
+		"REDIS_URL":          cfg.RedisURL,
+		"JWT_ACCESS_SECRET":  cfg.JWTAccessSecret,
+		"JWT_REFRESH_SECRET": cfg.JWTRefreshSecret,
 	}
 	for name, val := range required {
 		if val == "" {
@@ -57,4 +62,11 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func envOrDefault(name, fallback string) string {
+	if val := os.Getenv(name); val != "" {
+		return val
+	}
+	return fallback
 }
