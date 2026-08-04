@@ -15,6 +15,12 @@ const config: Config = {
         hover: "#60A5FA",
         "text-primary": "#FFFFFF",
         "text-secondary": "#94A3B8",
+        // Status colors — used sparingly for state (healthy/degraded/down
+        // badges), never decoratively. See docs/design-system.md.
+        success: "#4ADE80",
+        warning: "#FACC15",
+        error: "#F87171",
+        info: "#60A5FA",
       },
       borderColor: {
         DEFAULT: "rgba(255,255,255,.06)",

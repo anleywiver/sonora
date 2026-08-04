@@ -48,11 +48,78 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 8 selesai — lanjut Sprint 9 (Multi-drive pool)
+## Status saat ini: Sprint 9 selesai — lanjut Sprint 10 (Scheduled jobs)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 9 (selesai)
+
+Sprint 9 (Multi-drive pool) selesai 100% (2026-08-05), memperluas bootstrap
+minimal ADR 0002 dari Sprint 3 (backward-compatible, field/bentuk response
+tidak berubah). Backend diverifikasi lewat curl end-to-end + query SQL
+langsung buat quota-routing; frontend admin diverifikasi lewat Playwright
+browser asli, termasuk role gate Owner-vs-Member.
+
+Backend:
+- [x] `GetActiveStorageAccount` diganti jadi quota-aware: `ORDER BY
+      (COALESCE(quota_bytes, 999999999999) - used_bytes) DESC LIMIT 1`
+      dengan filter `health_status <> 'down'` — akun tanpa batas quota
+      (`quota_bytes IS NULL`) dianggap punya kapasitas nyaris tak
+      terbatas, bukan otomatis menang lewat `COALESCE` naif
+- [x] `Provider.HealthCheck` (interface baru) + implementasi Google Drive
+      lewat `About.Get().Fields("storageQuota")`; hasil ditulis balik ke
+      `health_status`/`quota_bytes`/`used_bytes`/`last_health_check_at`
+- [x] `application/storageaccount` — tambah `Delete` (ditolak dengan
+      `ErrInUse` kalau FK `storage_files` RESTRICT masih menunjuk ke akun
+      itu → 409, bukan 500) dan `HealthCheck`
+- [x] `DELETE /admin/storage/accounts/:id`, `POST
+      /admin/storage/accounts/:id/health-check` — endpoint terakhir yang
+      belum ada dari `docs/api-design.md` Admin section
+- [x] Login admin app-aware: `GET /auth/google?app=admin` menyisipkan app
+      ke `state` OAuth (`nonce:admin`, bukan query param terpisah supaya
+      tidak jadi open redirect — `resolveTargetURL` cuma bisa hasilkan 2
+      URL yang sudah dikonfigurasi), `ADMIN_URL` baru di config/`.env`
+
+Frontend admin (`apps/admin`, sebelumnya cuma scaffold bare sejak Sprint 1):
+- [x] `store/auth.ts`, `lib/api.ts`, `/login`, `/auth/callback`,
+      `providers.tsx` — pola identik dengan `apps/frontend`, plus fetch
+      `GET /auth/me` sesudah bootstrap buat dapat `role`
+- [x] `app-shell.tsx` — gate Owner: kalau `role !== "owner"` tampilkan
+      "Access Denied" alih-alih sidebar+children (defense in depth; API
+      sudah menegakkan `RequireRole(owner)` di semua route `/admin/*`,
+      tapi UI tidak boleh nampilkan wall of 403 ke Member yang salah masuk)
+- [x] `components/sidebar.tsx` — 6 section sesuai `docs/screens-spec.md`
+      (Dashboard, Drive Manager, Ingest Sources, Lyrics Source, Job Queue,
+      Analytics); hanya Drive Manager yang fungsional sprint ini, sisanya
+      placeholder jujur (pola vertical-slice yang sama dipakai `BottomNav`
+      Sprint 4)
+- [x] `/drive-manager` — card per storage account (badge health status,
+      progress bar quota, sisa GB), form "+ Add drive" (refresh token
+      masih manual/out-of-band sesuai ADR 0002 — tidak ada in-app OAuth
+      consent flow buat Drive), tombol "Run health check" dan delete per
+      card
+
+Diverifikasi:
+- curl: create x2 (quota beda), list, health-check (fake creds → `down`,
+  200), health-check akun tidak ada (404), delete (200), delete ulang
+  (404)
+- SQL langsung: 3 akun (LowFree/HighFree/DownAcct is_active tapi
+  health_status=down) → query routing pilih `HighFree` (free space
+  terbesar), `DownAcct` benar-benar dikecualikan meski quota totalnya
+  paling besar
+- Playwright (admin app, port 3001, BARU — sebelumnya semua browser test
+  di port 3000): login Owner → dashboard → 6 section sidebar render →
+  Drive Manager create → badge healthy → run health-check → badge down
+  (fake creds, expected) → delete → card hilang; login Member (role
+  seed manual) → "Access Denied", sidebar tidak render sama sekali
+
+**Butuh input manual dari user**: sama seperti Sprint 3/4/8, refresh token
+Drive asli (dan karenanya health check yang benar-benar `healthy`) masih
+menunggu `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` + refresh token nyata.
+Kode Drive Manager sudah lengkap dan gagal dengan rapi (`down`, bukan
+crash) tanpa itu.
 
 ### Sprint 8 (selesai)
 

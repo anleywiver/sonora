@@ -29,6 +29,13 @@ type Config struct {
 	// callback finishes (access token delivered as a URL fragment).
 	FrontendURL string
 
+	// AdminURL is the other valid OAuth redirect target (Sprint 9 — the
+	// admin app has its own login, same Google OAuth flow). GoogleLogin
+	// only accepts "frontend" or "admin" as the ?app= value and maps it to
+	// one of these two configured URLs — never an arbitrary redirect
+	// target, to avoid an open-redirect vulnerability.
+	AdminURL string
+
 	// IngestTmpDir holds uploaded files between accept (HTTP request) and
 	// process (worker task) — must be a volume shared by api and worker.
 	IngestTmpDir string
@@ -51,6 +58,7 @@ func Load() (*Config, error) {
 		GoogleRedirectURL:               os.Getenv("GOOGLE_REDIRECT_URL"),
 		StorageCredentialsEncryptionKey: os.Getenv("STORAGE_CREDENTIALS_ENCRYPTION_KEY"),
 		FrontendURL:                     envOrDefault("FRONTEND_URL", "http://localhost:3000"),
+		AdminURL:                        envOrDefault("ADMIN_URL", "http://localhost:3001"),
 		IngestTmpDir:                    envOrDefault("INGEST_TMP_DIR", "/data/ingest-tmp"),
 	}
 

@@ -69,3 +69,23 @@ func (p *GoogleDriveProvider) Download(ctx context.Context, providerFileID, rang
 		Partial:       resp.StatusCode == http.StatusPartialContent,
 	}, nil
 }
+
+// HealthCheck calls Drive's About.get, which both confirms the refresh
+// token still works and returns current quota usage in one round trip.
+func (p *GoogleDriveProvider) HealthCheck(ctx context.Context) (*QuotaInfo, error) {
+	svc, err := drive.NewService(ctx, option.WithTokenSource(p.tokenSource))
+	if err != nil {
+		return nil, fmt.Errorf("storage: drive client: %w", err)
+	}
+	about, err := svc.About.Get().Fields("storageQuota").Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("storage: drive about: %w", err)
+	}
+	if about.StorageQuota == nil {
+		return nil, fmt.Errorf("storage: drive about: no storageQuota in response")
+	}
+	return &QuotaInfo{
+		LimitBytes: about.StorageQuota.Limit,
+		UsedBytes:  about.StorageQuota.Usage,
+	}, nil
+}

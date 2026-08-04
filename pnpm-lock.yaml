@@ -17,6 +17,12 @@ importers:
 
   apps/admin:
     dependencies:
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^0.460.0
+        version: 0.460.0(react@19.2.8)
       next:
         specifier: ^15.0.0
         version: 15.5.22(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -29,6 +35,12 @@ importers:
       recharts:
         specifier: ^2.12.0
         version: 2.15.4(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      tailwind-merge:
+        specifier: ^2.5.4
+        version: 2.6.1
+      zustand:
+        specifier: ^4.5.0
+        version: 4.5.7(@types/react@19.2.18)(react@19.2.8)
     devDependencies:
       '@types/node':
         specifier: ^22.0.0

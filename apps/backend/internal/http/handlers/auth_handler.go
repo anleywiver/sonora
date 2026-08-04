@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -25,20 +26,30 @@ const (
 type AuthHandler struct {
 	service     *appauth.Service
 	frontendURL string
+	adminURL    string
 }
 
-func NewAuthHandler(service *appauth.Service, frontendURL string) *AuthHandler {
-	return &AuthHandler{service: service, frontendURL: frontendURL}
+func NewAuthHandler(service *appauth.Service, frontendURL, adminURL string) *AuthHandler {
+	return &AuthHandler{service: service, frontendURL: frontendURL, adminURL: adminURL}
 }
 
 // GoogleLogin redirects to Google's consent screen. The state nonce is
 // echoed back on the callback and checked against a short-lived cookie to
-// guard against CSRF.
+// guard against CSRF. ?app=admin also travels in the state (never as a
+// separate untrusted redirect param) so the callback knows whether to
+// hand off to the main frontend or the admin app — Sprint 9's Drive
+// Manager needs its own login, same Google account, same Owner check.
 func (h *AuthHandler) GoogleLogin(c *fiber.Ctx) error {
-	state, err := randomState()
+	app := "frontend"
+	if c.Query("app") == "admin" {
+		app = "admin"
+	}
+
+	nonce, err := randomState()
 	if err != nil {
 		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to start login")
 	}
+	state := nonce + ":" + app
 
 	c.Cookie(&fiber.Cookie{
 		Name:     stateCookieName,
@@ -53,9 +64,9 @@ func (h *AuthHandler) GoogleLogin(c *fiber.Ctx) error {
 }
 
 // GoogleCallback exchanges the code, upserts the user + device + tokens,
-// then hands off to the frontend: refresh token as an httpOnly cookie,
-// access token in the redirect fragment (never sent to any server, unlike
-// a query string).
+// then hands off to whichever app started the flow: refresh token as an
+// httpOnly cookie, access token in the redirect fragment (never sent to
+// any server, unlike a query string).
 func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	state := c.Query("state")
 	cookieState := c.Cookies(stateCookieName)
@@ -64,10 +75,11 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	if state == "" || cookieState == "" || state != cookieState {
 		return c.Redirect(h.frontendURL+"/login?error=invalid_state", fiber.StatusFound)
 	}
+	targetURL := h.resolveTargetURL(state)
 
 	code := c.Query("code")
 	if code == "" {
-		return c.Redirect(h.frontendURL+"/login?error=missing_code", fiber.StatusFound)
+		return c.Redirect(targetURL+"/login?error=missing_code", fiber.StatusFound)
 	}
 
 	deviceName := c.Get(fiber.HeaderUserAgent)
@@ -80,15 +92,26 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 
 	_, pair, err := h.service.HandleGoogleCallback(c.Context(), code, deviceName, identity.DeviceWeb)
 	if err != nil {
-		return c.Redirect(h.frontendURL+"/login?error=oauth_failed", fiber.StatusFound)
+		return c.Redirect(targetURL+"/login?error=oauth_failed", fiber.StatusFound)
 	}
 
 	h.setRefreshCookie(c, pair.RefreshToken, pair.RefreshTokenExpiresAt)
 
-	redirectURL := h.frontendURL + "/auth/callback#access_token=" + pair.AccessToken +
+	redirectURL := targetURL + "/auth/callback#access_token=" + pair.AccessToken +
 		"&expires_in=" + expiresInSeconds(pair.AccessTokenExpiresAt) +
 		"&device_id=" + pair.DeviceID.String()
 	return c.Redirect(redirectURL, fiber.StatusFound)
+}
+
+// resolveTargetURL maps the state's embedded app name to one of exactly
+// two configured URLs — never an arbitrary caller-supplied redirect, so
+// this can't become an open redirect.
+func (h *AuthHandler) resolveTargetURL(state string) string {
+	_, app, found := strings.Cut(state, ":")
+	if found && app == "admin" {
+		return h.adminURL
+	}
+	return h.frontendURL
 }
 
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {

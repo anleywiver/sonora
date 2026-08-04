@@ -78,7 +78,7 @@ func main() {
 	jwtIssuer := jwt.NewIssuer(cfg.JWTAccessSecret, accessTokenTTL)
 
 	authService := appauth.NewService(userRepo, deviceRepo, refreshTokenRepo, googleClient, jwtIssuer, refreshTokenTTL)
-	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL)
+	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL, cfg.AdminURL)
 	deviceHandler := handlers.NewDeviceHandler(authService)
 
 	credentialsBox, err := crypto.NewBox(cfg.StorageCredentialsEncryptionKey)
@@ -96,7 +96,7 @@ func main() {
 	ingestService := appingest.NewService(queries, credentialsBox, meiliClient, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	ingestHandler := handlers.NewIngestHandler(ingestService, asynqClient, idempotencyStore, cfg.IngestTmpDir)
 
-	storageAccountService := appstorage.NewService(queries, credentialsBox)
+	storageAccountService := appstorage.NewService(queries, credentialsBox, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	storageAccountHandler := handlers.NewStorageAccountHandler(storageAccountService)
 
 	catalogService := appcatalog.NewService(queries, credentialsBox, cfg.JWTAccessSecret, cfg.GoogleClientID, cfg.GoogleClientSecret)
@@ -173,6 +173,8 @@ func main() {
 	adminGroup := api.Group("/admin", requireAuth, requireOwner)
 	adminGroup.Post("/storage/accounts", storageAccountHandler.Create)
 	adminGroup.Get("/storage/accounts", storageAccountHandler.List)
+	adminGroup.Delete("/storage/accounts/:id", storageAccountHandler.Delete)
+	adminGroup.Post("/storage/accounts/:id/health-check", storageAccountHandler.HealthCheck)
 
 	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
 	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)

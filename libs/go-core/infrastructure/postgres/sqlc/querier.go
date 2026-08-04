@@ -25,9 +25,12 @@ type Querier interface {
 	CreateStorageFile(ctx context.Context, arg CreateStorageFileParams) (StorageFile, error)
 	DeleteIngestJob(ctx context.Context, arg DeleteIngestJobParams) (int64, error)
 	DeleteSong(ctx context.Context, id pgtype.UUID) error
+	DeleteStorageAccount(ctx context.Context, id pgtype.UUID) (int64, error)
 	FailIngestJob(ctx context.Context, arg FailIngestJobParams) error
-	// Sprint 3: pick the first active account, oldest first. No quota-aware
-	// routing yet — that's Sprint 9 (multi-drive pool).
+	// Sprint 9: quota-aware routing — pick the active, non-down account with
+	// the most free space. An account with no quota info yet (NULL, before
+	// its first health check) is treated as having plenty of room rather
+	// than excluded, so a brand new account isn't starved until checked.
 	GetActiveStorageAccount(ctx context.Context) (StorageAccount, error)
 	GetAlbumByArtistAndTitle(ctx context.Context, arg GetAlbumByArtistAndTitleParams) (Album, error)
 	GetAlbumByID(ctx context.Context, id pgtype.UUID) (Album, error)
@@ -66,6 +69,7 @@ type Querier interface {
 	RemoveQueueItem(ctx context.Context, arg RemoveQueueItemParams) error
 	ResetIngestJobToPending(ctx context.Context, id pgtype.UUID) error
 	UpdateQueueItemPosition(ctx context.Context, arg UpdateQueueItemPositionParams) (int64, error)
+	UpdateStorageAccountHealth(ctx context.Context, arg UpdateStorageAccountHealthParams) error
 	UpsertPlaybackState(ctx context.Context, arg UpsertPlaybackStateParams) (PlaybackState, error)
 }
 

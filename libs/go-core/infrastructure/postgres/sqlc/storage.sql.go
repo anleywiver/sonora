@@ -90,12 +90,29 @@ func (q *Queries) CreateStorageFile(ctx context.Context, arg CreateStorageFilePa
 	return i, err
 }
 
-const getActiveStorageAccount = `-- name: GetActiveStorageAccount :one
-SELECT id, provider, label, account_email, credentials_encrypted, quota_bytes, used_bytes, is_active, health_status, last_health_check_at, created_at, updated_at FROM storage_accounts WHERE is_active = true ORDER BY created_at ASC LIMIT 1
+const deleteStorageAccount = `-- name: DeleteStorageAccount :execrows
+DELETE FROM storage_accounts WHERE id = $1
 `
 
-// Sprint 3: pick the first active account, oldest first. No quota-aware
-// routing yet — that's Sprint 9 (multi-drive pool).
+func (q *Queries) DeleteStorageAccount(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStorageAccount, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getActiveStorageAccount = `-- name: GetActiveStorageAccount :one
+SELECT id, provider, label, account_email, credentials_encrypted, quota_bytes, used_bytes, is_active, health_status, last_health_check_at, created_at, updated_at FROM storage_accounts
+WHERE is_active = true AND health_status <> 'down'
+ORDER BY (COALESCE(quota_bytes, 999999999999) - used_bytes) DESC
+LIMIT 1
+`
+
+// Sprint 9: quota-aware routing — pick the active, non-down account with
+// the most free space. An account with no quota info yet (NULL, before
+// its first health check) is treated as having plenty of room rather
+// than excluded, so a brand new account isn't starved until checked.
 func (q *Queries) GetActiveStorageAccount(ctx context.Context) (StorageAccount, error) {
 	row := q.db.QueryRow(ctx, getActiveStorageAccount)
 	var i StorageAccount
@@ -208,4 +225,31 @@ func (q *Queries) ListStorageAccounts(ctx context.Context) ([]StorageAccount, er
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateStorageAccountHealth = `-- name: UpdateStorageAccountHealth :exec
+UPDATE storage_accounts SET
+  health_status = $2,
+  quota_bytes = $3,
+  used_bytes = $4,
+  last_health_check_at = now(),
+  updated_at = now()
+WHERE id = $1
+`
+
+type UpdateStorageAccountHealthParams struct {
+	ID           pgtype.UUID `json:"id"`
+	HealthStatus string      `json:"health_status"`
+	QuotaBytes   *int64      `json:"quota_bytes"`
+	UsedBytes    int64       `json:"used_bytes"`
+}
+
+func (q *Queries) UpdateStorageAccountHealth(ctx context.Context, arg UpdateStorageAccountHealthParams) error {
+	_, err := q.db.Exec(ctx, updateStorageAccountHealth,
+		arg.ID,
+		arg.HealthStatus,
+		arg.QuotaBytes,
+		arg.UsedBytes,
+	)
+	return err
 }
