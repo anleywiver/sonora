@@ -1,20 +1,41 @@
 package main
 
 import (
+	"context"
 	"log"
-	"os"
 
 	"github.com/hibiken/asynq"
+
+	"sonora.dev/go-core/config"
+	"sonora.dev/go-core/infrastructure/postgres"
 )
 
 func main() {
-	redisAddr := os.Getenv("REDIS_URL")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config: %v", err)
 	}
 
+	ctx := context.Background()
+
+	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("postgres pool: %v", err)
+	}
+	defer pool.Close()
+
+	gormDB, err := postgres.NewGormDB(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("gorm: %v", err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		log.Fatalf("gorm underlying db: %v", err)
+	}
+	defer sqlDB.Close()
+
 	srv := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: redisAddr},
+		asynq.RedisClientOpt{Addr: cfg.RedisURL},
 		asynq.Config{
 			// Concurrency dibatasi supaya tidak overload storage provider
 			// (lihat concern rate-limit Google Drive di STEP 3 System Flow)
@@ -31,7 +52,7 @@ func main() {
 	// Task handler akan didaftarkan di sini mulai Sprint 3 (ingest pipeline)
 	// mux.HandleFunc("ingest:process", tasks.HandleIngestTask)
 
-	log.Println("sonora-worker starting, connecting to redis:", redisAddr)
+	log.Println("sonora-worker starting, connecting to redis:", cfg.RedisURL)
 	if err := srv.Run(mux); err != nil {
 		log.Fatalf("worker failed to start: %v", err)
 	}
