@@ -40,21 +40,21 @@ const (
 )
 
 type Favorite struct {
-	ID               uuid.UUID       `gorm:"type:uuid;primaryKey"`
-	UserID           uuid.UUID       `gorm:"column:user_id;not null;index"`
-	FavoritableType  FavoritableType `gorm:"column:favoritable_type;not null"`
-	FavoritableID    uuid.UUID       `gorm:"column:favoritable_id;not null"`
-	CreatedAt        time.Time       `gorm:"not null;default:now()"`
+	ID              uuid.UUID       `gorm:"type:uuid;primaryKey"`
+	UserID          uuid.UUID       `gorm:"column:user_id;not null;index"`
+	FavoritableType FavoritableType `gorm:"column:favoritable_type;not null"`
+	FavoritableID   uuid.UUID       `gorm:"column:favoritable_id;not null"`
+	CreatedAt       time.Time       `gorm:"not null;default:now()"`
 }
 
 func (Favorite) TableName() string { return "favorites" }
 
 type PlayHistory struct {
-	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`
-	UserID      uuid.UUID `gorm:"column:user_id;not null;index"`
-	SongID      uuid.UUID `gorm:"column:song_id;not null"`
-	ProgressMs  int       `gorm:"column:progress_ms;not null;default:0"`
-	PlayedAt    time.Time `gorm:"column:played_at;not null;default:now()"`
+	ID         uuid.UUID `gorm:"type:uuid;primaryKey"`
+	UserID     uuid.UUID `gorm:"column:user_id;not null;index"`
+	SongID     uuid.UUID `gorm:"column:song_id;not null"`
+	ProgressMs int       `gorm:"column:progress_ms;not null;default:0"`
+	PlayedAt   time.Time `gorm:"column:played_at;not null;default:now()"`
 }
 
 func (PlayHistory) TableName() string { return "play_history" }

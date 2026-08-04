@@ -13,16 +13,38 @@ import (
 type Querier interface {
 	AddQueueItem(ctx context.Context, arg AddQueueItemParams) (QueueItem, error)
 	ClearQueue(ctx context.Context, userID pgtype.UUID) error
+	CompleteIngestJob(ctx context.Context, arg CompleteIngestJobParams) error
+	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
+	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
+	CreateIngestJob(ctx context.Context, arg CreateIngestJobParams) (IngestJob, error)
 	CreateSong(ctx context.Context, arg CreateSongParams) (Song, error)
+	CreateStorageAccount(ctx context.Context, arg CreateStorageAccountParams) (StorageAccount, error)
+	CreateStorageFile(ctx context.Context, arg CreateStorageFileParams) (StorageFile, error)
+	DeleteIngestJob(ctx context.Context, arg DeleteIngestJobParams) (int64, error)
 	DeleteSong(ctx context.Context, id pgtype.UUID) error
+	FailIngestJob(ctx context.Context, arg FailIngestJobParams) error
+	// Sprint 3: pick the first active account, oldest first. No quota-aware
+	// routing yet — that's Sprint 9 (multi-drive pool).
+	GetActiveStorageAccount(ctx context.Context) (StorageAccount, error)
+	GetAlbumByArtistAndTitle(ctx context.Context, arg GetAlbumByArtistAndTitleParams) (Album, error)
+	GetAlbumByID(ctx context.Context, id pgtype.UUID) (Album, error)
+	GetArtistByID(ctx context.Context, id pgtype.UUID) (Artist, error)
+	GetArtistByName(ctx context.Context, name string) (Artist, error)
+	GetIngestJobByID(ctx context.Context, id pgtype.UUID) (IngestJob, error)
 	GetPlaybackState(ctx context.Context, userID pgtype.UUID) (PlaybackState, error)
 	// Used by the ingest pipeline for dedup before touching storage.
 	GetSongByChecksum(ctx context.Context, checksum string) (Song, error)
 	GetSongByID(ctx context.Context, id pgtype.UUID) (Song, error)
+	GetStorageFileByChecksum(ctx context.Context, checksum string) (StorageFile, error)
+	IncrementStorageAccountUsedBytes(ctx context.Context, arg IncrementStorageAccountUsedBytesParams) error
+	ListIngestJobsByUser(ctx context.Context, arg ListIngestJobsByUserParams) ([]IngestJob, error)
 	ListQueueByUser(ctx context.Context, userID pgtype.UUID) ([]QueueItem, error)
 	ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]Song, error)
 	ListSongsByArtist(ctx context.Context, arg ListSongsByArtistParams) ([]Song, error)
+	ListStorageAccounts(ctx context.Context) ([]StorageAccount, error)
+	MarkIngestJobProcessing(ctx context.Context, id pgtype.UUID) error
 	RemoveQueueItem(ctx context.Context, arg RemoveQueueItemParams) error
+	ResetIngestJobToPending(ctx context.Context, id pgtype.UUID) error
 	UpsertPlaybackState(ctx context.Context, arg UpsertPlaybackStateParams) (PlaybackState, error)
 }
 

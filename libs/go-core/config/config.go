@@ -28,6 +28,10 @@ type Config struct {
 	// FrontendURL is where the browser gets redirected after the OAuth
 	// callback finishes (access token delivered as a URL fragment).
 	FrontendURL string
+
+	// IngestTmpDir holds uploaded files between accept (HTTP request) and
+	// process (worker task) — must be a volume shared by api and worker.
+	IngestTmpDir string
 }
 
 // Load reads .env (if present — Docker Compose injects env vars directly and
@@ -47,13 +51,15 @@ func Load() (*Config, error) {
 		GoogleRedirectURL:               os.Getenv("GOOGLE_REDIRECT_URL"),
 		StorageCredentialsEncryptionKey: os.Getenv("STORAGE_CREDENTIALS_ENCRYPTION_KEY"),
 		FrontendURL:                     envOrDefault("FRONTEND_URL", "http://localhost:3000"),
+		IngestTmpDir:                    envOrDefault("INGEST_TMP_DIR", "/data/ingest-tmp"),
 	}
 
 	required := map[string]string{
-		"DATABASE_URL":       cfg.DatabaseURL,
-		"REDIS_URL":          cfg.RedisURL,
-		"JWT_ACCESS_SECRET":  cfg.JWTAccessSecret,
-		"JWT_REFRESH_SECRET": cfg.JWTRefreshSecret,
+		"DATABASE_URL":                       cfg.DatabaseURL,
+		"REDIS_URL":                          cfg.RedisURL,
+		"JWT_ACCESS_SECRET":                  cfg.JWTAccessSecret,
+		"JWT_REFRESH_SECRET":                 cfg.JWTRefreshSecret,
+		"STORAGE_CREDENTIALS_ENCRYPTION_KEY": cfg.StorageCredentialsEncryptionKey,
 	}
 	for name, val := range required {
 		if val == "" {

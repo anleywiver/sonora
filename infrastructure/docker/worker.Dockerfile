@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
 
 # GOWORK=off: go.work lists all workspace members (including apps/backend),
@@ -13,6 +13,8 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/worker ./cmd/worker
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates
+# ffmpeg provides ffprobe, used by the ingest pipeline (Sprint 3) to read
+# duration and tags from uploaded audio files.
+RUN apk add --no-cache ca-certificates ffmpeg
 COPY --from=builder /out/worker /usr/local/bin/worker
 ENTRYPOINT ["/usr/local/bin/worker"]

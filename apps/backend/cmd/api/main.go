@@ -9,14 +9,21 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"github.com/hibiken/asynq"
 
 	appauth "sonora.dev/go-core/application/auth"
+	appingest "sonora.dev/go-core/application/ingest"
+	appstorage "sonora.dev/go-core/application/storageaccount"
 	"sonora.dev/go-core/config"
 	"sonora.dev/go-core/domain/identity"
+	"sonora.dev/go-core/infrastructure/crypto"
+	"sonora.dev/go-core/infrastructure/idempotency"
 	"sonora.dev/go-core/infrastructure/jwt"
 	"sonora.dev/go-core/infrastructure/oauth"
 	"sonora.dev/go-core/infrastructure/postgres"
 	"sonora.dev/go-core/infrastructure/postgres/repository"
+	"sonora.dev/go-core/infrastructure/postgres/sqlc"
+	"sonora.dev/go-core/infrastructure/redis"
 
 	"sonora.dev/backend/internal/http/handlers"
 	"sonora.dev/backend/internal/http/middleware"
@@ -62,6 +69,22 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL)
 	deviceHandler := handlers.NewDeviceHandler(authService)
 
+	credentialsBox, err := crypto.NewBox(cfg.StorageCredentialsEncryptionKey)
+	if err != nil {
+		log.Fatalf("storage credentials box: %v", err)
+	}
+	queries := sqlc.New(pool)
+	redisClient := redis.NewClient(cfg.RedisURL)
+	idempotencyStore := idempotency.NewStore(redisClient)
+	asynqClient := asynq.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisURL})
+	defer asynqClient.Close()
+
+	ingestService := appingest.NewService(queries, credentialsBox, cfg.GoogleClientID, cfg.GoogleClientSecret)
+	ingestHandler := handlers.NewIngestHandler(ingestService, asynqClient, idempotencyStore, cfg.IngestTmpDir)
+
+	storageAccountService := appstorage.NewService(queries, credentialsBox)
+	storageAccountHandler := handlers.NewStorageAccountHandler(storageAccountService)
+
 	requireAuth := middleware.RequireAuth(jwtIssuer)
 	requireOwner := middleware.RequireRole(string(identity.RoleOwner))
 
@@ -97,6 +120,17 @@ func main() {
 
 	api.Get("/devices", requireAuth, deviceHandler.List)
 	api.Delete("/devices/:id", requireAuth, deviceHandler.Delete)
+
+	ingestGroup := api.Group("/ingest", requireAuth)
+	ingestGroup.Post("/upload", ingestHandler.Upload)
+	ingestGroup.Get("/jobs", ingestHandler.List)
+	ingestGroup.Get("/jobs/:id", ingestHandler.Get)
+	ingestGroup.Post("/jobs/:id/retry", ingestHandler.Retry)
+	ingestGroup.Delete("/jobs/:id", ingestHandler.Delete)
+
+	adminGroup := api.Group("/admin", requireAuth, requireOwner)
+	adminGroup.Post("/storage/accounts", storageAccountHandler.Create)
+	adminGroup.Get("/storage/accounts", storageAccountHandler.List)
 
 	log.Fatal(app.Listen(":8080"))
 }

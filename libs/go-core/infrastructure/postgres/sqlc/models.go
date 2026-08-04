@@ -59,6 +59,7 @@ type IngestJob struct {
 	ErrorMessage *string            `json:"error_message"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	TempPath     *string            `json:"temp_path"`
 }
 
 type Lyric struct {

@@ -53,6 +53,8 @@ services:
     env_file: .env
     ports:
       - "8080:8080"
+    volumes:
+      - ingest_tmp:/data/ingest-tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,6 +69,8 @@ services:
       dockerfile: infrastructure/docker/worker.Dockerfile
     restart: unless-stopped
     env_file: .env
+    volumes:
+      - ingest_tmp:/data/ingest-tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,3 +81,6 @@ volumes:
   postgres_data:
   redis_data:
   meili_data:
+  # Shared between api (writes uploads) and worker (reads them for the
+  # ingest pipeline) — see Sprint 3 / ADR 0002.
+  ingest_tmp:

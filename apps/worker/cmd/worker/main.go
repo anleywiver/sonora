@@ -2,12 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/hibiken/asynq"
 
+	appingest "sonora.dev/go-core/application/ingest"
 	"sonora.dev/go-core/config"
+	"sonora.dev/go-core/infrastructure/crypto"
 	"sonora.dev/go-core/infrastructure/postgres"
+	"sonora.dev/go-core/infrastructure/postgres/sqlc"
 )
 
 func main() {
@@ -34,6 +39,13 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+	credentialsBox, err := crypto.NewBox(cfg.StorageCredentialsEncryptionKey)
+	if err != nil {
+		log.Fatalf("storage credentials box: %v", err)
+	}
+	queries := sqlc.New(pool)
+	ingestService := appingest.NewService(queries, credentialsBox, cfg.GoogleClientID, cfg.GoogleClientSecret)
+
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: cfg.RedisURL},
 		asynq.Config{
@@ -49,8 +61,13 @@ func main() {
 	)
 
 	mux := asynq.NewServeMux()
-	// Task handler akan didaftarkan di sini mulai Sprint 3 (ingest pipeline)
-	// mux.HandleFunc("ingest:process", tasks.HandleIngestTask)
+	mux.HandleFunc(appingest.TaskTypeProcess, func(ctx context.Context, t *asynq.Task) error {
+		var payload appingest.ProcessPayload
+		if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+			return fmt.Errorf("ingest:process: unmarshal payload: %w", err)
+		}
+		return ingestService.Process(ctx, payload.JobID)
+	})
 
 	log.Println("sonora-worker starting, connecting to redis:", cfg.RedisURL)
 	if err := srv.Run(mux); err != nil {
