@@ -37,6 +37,7 @@ LIMIT $1;
 -- bytes from the storage provider).
 SELECT
   s.id, s.title, s.duration_ms, s.track_number, s.checksum,
+  s.waveform_peaks,
   s.album_id, al.title AS album_title, al.cover_url AS album_cover_url,
   s.artist_id, ar.name AS artist_name,
   s.storage_file_id, sf.provider_file_id, sf.mime_type, sf.size_bytes,
@@ -46,3 +47,9 @@ JOIN artists ar ON ar.id = s.artist_id
 LEFT JOIN albums al ON al.id = s.album_id
 JOIN storage_files sf ON sf.id = s.storage_file_id
 WHERE s.id = $1;
+
+-- name: UpdateSongWaveform :exec
+UPDATE songs SET waveform_peaks = $2, updated_at = now() WHERE id = $1;
+
+-- name: UpdateSongMusicbrainzID :exec
+UPDATE songs SET musicbrainz_id = $2, updated_at = now() WHERE id = $1;

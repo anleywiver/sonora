@@ -20,6 +20,7 @@ import (
 	"sonora.dev/go-core/infrastructure/crypto"
 	"sonora.dev/go-core/infrastructure/mediainfo"
 	"sonora.dev/go-core/infrastructure/meilisearch"
+	"sonora.dev/go-core/infrastructure/musicbrainz"
 	"sonora.dev/go-core/infrastructure/postgres/sqlc"
 	"sonora.dev/go-core/infrastructure/storage"
 )
@@ -28,12 +29,20 @@ type Service struct {
 	q                  *sqlc.Queries
 	box                *crypto.Box
 	search             *meilisearch.Client
+	musicbrainz        *musicbrainz.Client
 	googleClientID     string
 	googleClientSecret string
 }
 
 func NewService(q *sqlc.Queries, box *crypto.Box, search *meilisearch.Client, googleClientID, googleClientSecret string) *Service {
-	return &Service{q: q, box: box, search: search, googleClientID: googleClientID, googleClientSecret: googleClientSecret}
+	return &Service{
+		q:                  q,
+		box:                box,
+		search:             search,
+		musicbrainz:        musicbrainz.NewClient(),
+		googleClientID:     googleClientID,
+		googleClientSecret: googleClientSecret,
+	}
 }
 
 // Accept records an uploaded/fetched file as an ingest job. If a song with
@@ -302,8 +311,50 @@ func (s *Service) Process(ctx context.Context, jobID uuid.UUID) error {
 		log.Printf("ingest: index song %s in search: %v", jobID, indexErr)
 	}
 
+	// Waveform + MusicBrainz enrichment (Sprint 11, ADR 0005) — both
+	// best-effort, neither can fail an already-completed job.
+	if peaks, err := mediainfo.GenerateWaveform(ctx, tempPath); err != nil {
+		log.Printf("ingest: generate waveform for song %s: %v", song.ID, err)
+	} else if err := s.q.UpdateSongWaveform(ctx, sqlc.UpdateSongWaveformParams{ID: song.ID, WaveformPeaks: peaks}); err != nil {
+		log.Printf("ingest: save waveform for song %s: %v", song.ID, err)
+	}
+	s.enrichWithMusicbrainz(ctx, song, artist, albumID, title, artistName, int(info.DurationMs))
+
 	_ = os.Remove(tempPath)
 	return nil
+}
+
+func (s *Service) enrichWithMusicbrainz(ctx context.Context, song sqlc.Song, artist sqlc.Artist, albumID pgtype.UUID, title, artistName string, durationMs int) {
+	match, err := s.musicbrainz.FindRecording(ctx, title, artistName, durationMs)
+	if err != nil {
+		log.Printf("ingest: musicbrainz lookup for song %s: %v", song.ID, err)
+		return
+	}
+	if match == nil {
+		return
+	}
+
+	if err := s.q.UpdateSongMusicbrainzID(ctx, sqlc.UpdateSongMusicbrainzIDParams{ID: song.ID, MusicbrainzID: &match.RecordingMBID}); err != nil {
+		log.Printf("ingest: save song musicbrainz_id for %s: %v", song.ID, err)
+	}
+	if match.ArtistMBID != "" {
+		if err := s.q.UpdateArtistMusicbrainzID(ctx, sqlc.UpdateArtistMusicbrainzIDParams{ID: artist.ID, MusicbrainzID: &match.ArtistMBID}); err != nil {
+			log.Printf("ingest: save artist musicbrainz_id for %s: %v", artist.ID, err)
+		}
+	}
+	if albumID.Valid && match.ReleaseMBID != "" {
+		var coverURL *string
+		if match.CoverURL != "" {
+			coverURL = &match.CoverURL
+		}
+		if err := s.q.UpdateAlbumMusicbrainzAndCover(ctx, sqlc.UpdateAlbumMusicbrainzAndCoverParams{
+			ID:            albumID,
+			MusicbrainzID: &match.ReleaseMBID,
+			CoverUrl:      coverURL,
+		}); err != nil {
+			log.Printf("ingest: save album musicbrainz_id/cover for %s: %v", fromPgUUID(albumID), err)
+		}
+	}
 }
 
 func (s *Service) indexSong(ctx context.Context, song sqlc.Song, artist sqlc.Artist, albumTitle string) error {

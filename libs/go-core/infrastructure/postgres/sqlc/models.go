@@ -9,21 +9,23 @@ import (
 )
 
 type Album struct {
-	ID         pgtype.UUID        `json:"id"`
-	ArtistID   pgtype.UUID        `json:"artist_id"`
-	Title      string             `json:"title"`
-	CoverUrl   *string            `json:"cover_url"`
-	ReleasedAt pgtype.Date        `json:"released_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID            pgtype.UUID        `json:"id"`
+	ArtistID      pgtype.UUID        `json:"artist_id"`
+	Title         string             `json:"title"`
+	CoverUrl      *string            `json:"cover_url"`
+	ReleasedAt    pgtype.Date        `json:"released_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	MusicbrainzID *string            `json:"musicbrainz_id"`
 }
 
 type Artist struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	ImageUrl  *string            `json:"image_url"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID            pgtype.UUID        `json:"id"`
+	Name          string             `json:"name"`
+	ImageUrl      *string            `json:"image_url"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	MusicbrainzID *string            `json:"musicbrainz_id"`
 }
 
 type Device struct {
@@ -157,6 +159,8 @@ type Song struct {
 	Checksum      string             `json:"checksum"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	WaveformPeaks []int16            `json:"waveform_peaks"`
+	MusicbrainzID *string            `json:"musicbrainz_id"`
 }
 
 type SongGenre struct {

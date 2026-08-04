@@ -14,7 +14,7 @@ import (
 const createSong = `-- name: CreateSong :one
 INSERT INTO songs (id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at
+RETURNING id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id
 `
 
 type CreateSongParams struct {
@@ -51,6 +51,8 @@ func (q *Queries) CreateSong(ctx context.Context, arg CreateSongParams) (Song, e
 		&i.Checksum,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WaveformPeaks,
+		&i.MusicbrainzID,
 	)
 	return i, err
 }
@@ -65,7 +67,7 @@ func (q *Queries) DeleteSong(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getSongByChecksum = `-- name: GetSongByChecksum :one
-SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at FROM songs WHERE checksum = $1
+SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id FROM songs WHERE checksum = $1
 `
 
 // Used by the ingest pipeline for dedup before touching storage.
@@ -83,12 +85,14 @@ func (q *Queries) GetSongByChecksum(ctx context.Context, checksum string) (Song,
 		&i.Checksum,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WaveformPeaks,
+		&i.MusicbrainzID,
 	)
 	return i, err
 }
 
 const getSongByID = `-- name: GetSongByID :one
-SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at FROM songs WHERE id = $1
+SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id FROM songs WHERE id = $1
 `
 
 func (q *Queries) GetSongByID(ctx context.Context, id pgtype.UUID) (Song, error) {
@@ -105,6 +109,8 @@ func (q *Queries) GetSongByID(ctx context.Context, id pgtype.UUID) (Song, error)
 		&i.Checksum,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WaveformPeaks,
+		&i.MusicbrainzID,
 	)
 	return i, err
 }
@@ -112,6 +118,7 @@ func (q *Queries) GetSongByID(ctx context.Context, id pgtype.UUID) (Song, error)
 const getSongDetail = `-- name: GetSongDetail :one
 SELECT
   s.id, s.title, s.duration_ms, s.track_number, s.checksum,
+  s.waveform_peaks,
   s.album_id, al.title AS album_title, al.cover_url AS album_cover_url,
   s.artist_id, ar.name AS artist_name,
   s.storage_file_id, sf.provider_file_id, sf.mime_type, sf.size_bytes,
@@ -129,6 +136,7 @@ type GetSongDetailRow struct {
 	DurationMs       int32       `json:"duration_ms"`
 	TrackNumber      *int32      `json:"track_number"`
 	Checksum         string      `json:"checksum"`
+	WaveformPeaks    []int16     `json:"waveform_peaks"`
 	AlbumID          pgtype.UUID `json:"album_id"`
 	AlbumTitle       *string     `json:"album_title"`
 	AlbumCoverUrl    *string     `json:"album_cover_url"`
@@ -153,6 +161,7 @@ func (q *Queries) GetSongDetail(ctx context.Context, id pgtype.UUID) (GetSongDet
 		&i.DurationMs,
 		&i.TrackNumber,
 		&i.Checksum,
+		&i.WaveformPeaks,
 		&i.AlbumID,
 		&i.AlbumTitle,
 		&i.AlbumCoverUrl,
@@ -214,7 +223,7 @@ func (q *Queries) ListRecentSongs(ctx context.Context, limit int32) ([]ListRecen
 }
 
 const listSongsByAlbum = `-- name: ListSongsByAlbum :many
-SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at FROM songs WHERE album_id = $1 ORDER BY track_number ASC NULLS LAST, title ASC
+SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id FROM songs WHERE album_id = $1 ORDER BY track_number ASC NULLS LAST, title ASC
 `
 
 func (q *Queries) ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]Song, error) {
@@ -237,6 +246,8 @@ func (q *Queries) ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]
 			&i.Checksum,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WaveformPeaks,
+			&i.MusicbrainzID,
 		); err != nil {
 			return nil, err
 		}
@@ -249,7 +260,7 @@ func (q *Queries) ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]
 }
 
 const listSongsByArtist = `-- name: ListSongsByArtist :many
-SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at FROM songs
+SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id FROM songs
 WHERE artist_id = $1
 ORDER BY created_at DESC, id DESC
 LIMIT $2
@@ -280,6 +291,8 @@ func (q *Queries) ListSongsByArtist(ctx context.Context, arg ListSongsByArtistPa
 			&i.Checksum,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WaveformPeaks,
+			&i.MusicbrainzID,
 		); err != nil {
 			return nil, err
 		}
@@ -289,4 +302,32 @@ func (q *Queries) ListSongsByArtist(ctx context.Context, arg ListSongsByArtistPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateSongMusicbrainzID = `-- name: UpdateSongMusicbrainzID :exec
+UPDATE songs SET musicbrainz_id = $2, updated_at = now() WHERE id = $1
+`
+
+type UpdateSongMusicbrainzIDParams struct {
+	ID            pgtype.UUID `json:"id"`
+	MusicbrainzID *string     `json:"musicbrainz_id"`
+}
+
+func (q *Queries) UpdateSongMusicbrainzID(ctx context.Context, arg UpdateSongMusicbrainzIDParams) error {
+	_, err := q.db.Exec(ctx, updateSongMusicbrainzID, arg.ID, arg.MusicbrainzID)
+	return err
+}
+
+const updateSongWaveform = `-- name: UpdateSongWaveform :exec
+UPDATE songs SET waveform_peaks = $2, updated_at = now() WHERE id = $1
+`
+
+type UpdateSongWaveformParams struct {
+	ID            pgtype.UUID `json:"id"`
+	WaveformPeaks []int16     `json:"waveform_peaks"`
+}
+
+func (q *Queries) UpdateSongWaveform(ctx context.Context, arg UpdateSongWaveformParams) error {
+	_, err := q.db.Exec(ctx, updateSongWaveform, arg.ID, arg.WaveformPeaks)
+	return err
 }

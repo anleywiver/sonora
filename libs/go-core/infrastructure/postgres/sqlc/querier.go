@@ -54,6 +54,11 @@ type Querier interface {
 	GetSongDetail(ctx context.Context, id pgtype.UUID) (GetSongDetailRow, error)
 	GetStorageAccountByID(ctx context.Context, id pgtype.UUID) (StorageAccount, error)
 	GetStorageFileByChecksum(ctx context.Context, checksum string) (StorageFile, error)
+	// One row per month for the last 6 months (including the current one),
+	// zero-filled via generate_series so a quiet month still shows up as a
+	// bar at 0 instead of vanishing from the chart.
+	GetStorageGrowth(ctx context.Context) ([]GetStorageGrowthRow, error)
+	GetTopPlayedSongs(ctx context.Context, limit int32) ([]GetTopPlayedSongsRow, error)
 	IncrementStorageAccountUsedBytes(ctx context.Context, arg IncrementStorageAccountUsedBytesParams) error
 	ListActiveIngestSourceConnections(ctx context.Context) ([]IngestSourceConnection, error)
 	ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) ([]Album, error)
@@ -78,8 +83,16 @@ type Querier interface {
 	MarkIngestJobProcessing(ctx context.Context, id pgtype.UUID) error
 	RemoveQueueItem(ctx context.Context, arg RemoveQueueItemParams) error
 	ResetIngestJobToPending(ctx context.Context, id pgtype.UUID) error
+	// musicbrainz_id always fills in; cover_url only fills in if still empty
+	// (never overwrites a cover the user or an earlier match already set).
+	UpdateAlbumMusicbrainzAndCover(ctx context.Context, arg UpdateAlbumMusicbrainzAndCoverParams) error
+	// Only fills a still-empty musicbrainz_id — never overwrites a value set
+	// by an earlier, possibly more specific match.
+	UpdateArtistMusicbrainzID(ctx context.Context, arg UpdateArtistMusicbrainzIDParams) error
 	UpdateIngestSourceConnectionSync(ctx context.Context, arg UpdateIngestSourceConnectionSyncParams) error
 	UpdateQueueItemPosition(ctx context.Context, arg UpdateQueueItemPositionParams) (int64, error)
+	UpdateSongMusicbrainzID(ctx context.Context, arg UpdateSongMusicbrainzIDParams) error
+	UpdateSongWaveform(ctx context.Context, arg UpdateSongWaveformParams) error
 	UpdateStorageAccountHealth(ctx context.Context, arg UpdateStorageAccountHealthParams) error
 	UpsertPlaybackState(ctx context.Context, arg UpsertPlaybackStateParams) (PlaybackState, error)
 }

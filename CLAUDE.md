@@ -48,11 +48,75 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 10 selesai — lanjut Sprint 11 (Polish ingest)
+## Status saat ini: Sprint 11 selesai — lanjut Sprint 12 (Security hardening)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 11 (selesai)
+
+Sprint 11 (Polish ingest) selesai 100% (2026-08-05). Beda dari
+sprint-sprint sebelumnya: MusicBrainz + Cover Art Archive tidak butuh
+credential sama sekali, jadi ini sprint pertama yang bisa diverifikasi
+end-to-end PENUH tanpa "butuh input manual dari user" — dibuktikan
+dengan lagu asli ("Yesterday" — The Beatles) lewat panggilan API
+sungguhan, sama seperti verifikasi LRCLIB di Sprint 6. Desain baru
+(skema kolom, scope enrichment) didokumentasikan di
+`docs/decisions/0005-sprint11-waveform-musicbrainz-analytics.md` karena
+`docs/api-design.md` tidak menyebutnya sama sekali (kecuali 2 endpoint
+analytics yang sudah ada).
+
+- [x] Migration `000006` — `songs.waveform_peaks SMALLINT[]`,
+      `songs/artists/albums.musicbrainz_id` (semua nullable — ingest
+      tetap lengkap tanpa keduanya)
+- [x] `mediainfo.GenerateWaveform` — shell out `ffmpeg` (sudah ada sejak
+      Sprint 3 untuk `ffprobe`) decode ke PCM 8-bit mono 8kHz, reduce ke
+      200 bucket peak — tidak nambah dependency baru
+- [x] `infrastructure/musicbrainz` — cari recording by title+artist+
+      duration (toleransi ±2 detik), rate limit 1 req/detik
+      (`golang.org/x/time/rate`, sudah transitive dependency lewat
+      `google.golang.org/api`) sesuai kebijakan resmi MusicBrainz; kalau
+      match ketemu dan cover art ada di Cover Art Archive (dicek beneran
+      lewat HEAD request, bukan asumsi URL), isi `albums.cover_url`
+      HANYA kalau masih kosong
+- [x] `ingest.Process` — waveform + MusicBrainz jalan setelah
+      `CompleteIngestJob`, keduanya best-effort (gagal di-log, TIDAK
+      menggagalkan job yang sudah `completed`)
+- [x] `application/analytics` + `GET /admin/analytics/top-played`,
+      `GET /admin/analytics/storage-growth` (query baru: top 10 dari
+      `play_history`, total bytes storage per bulan 6 bulan terakhir
+      dengan zero-fill via `generate_series` biar bulan sepi tetap
+      muncul di chart sebagai 0)
+- [x] Admin `/analytics` — dari placeholder (sejak Sprint 9) jadi
+      fungsional: bar chart Storage Growth + list Most Played, pakai
+      `recharts` yang sudah jadi dependency `apps/admin` sejak Sprint 1
+      scaffold tapi belum pernah dipakai. "Download Trend" dari
+      `docs/screens-spec.md` #21 SENGAJA tidak dibangun — tidak ada
+      endpoint pendukungnya, di luar scope Sprint 11 (lihat ADR 0005)
+
+Diverifikasi jauh melebihi ekspektasi awal — upload 2 file MP3 nyata
+(dibuat dengan `ffmpeg` + tag ID3 asli) lewat pipeline ingest yang
+SESUNGGUHNYA (bukan panggil fungsi langsung), storage upload di-bypass
+pakai pre-seeded `storage_files` row (dedup by checksum) supaya tetap
+bisa jalan tanpa credential Drive asli, tapi waveform + MusicBrainz +
+Cover Art Archive semuanya panggilan jaringan SUNGGUHAN:
+- File 1 (tag "Yesterday"/"The Beatles", durasi ~125 detik pas): dapat
+  `musicbrainz_id` recording asli, `musicbrainz_id` artist asli, album
+  "Help!" dengan `musicbrainz_id` asli, DAN `cover_url` dari Cover Art
+  Archive yang dikonfirmasi HTTP 200 (gambar beneran ada)
+- File 2 (tag fiktif "Totally Fictional Song Xyzzy123"): tidak dapat
+  match (perilaku benar — bukan bug), tapi waveform tetap ke-generate
+  (200 peak) — membuktikan dua fitur independen satu sama lain
+- Kedua file: `waveform_peaks` ke-generate 200 titik dari audio asli
+- Analytics: play history asli direkam untuk "Yesterday" → top-played
+  menunjukkan hasil yang benar; storage-growth menunjukkan total bytes
+  bulan berjalan dengan benar
+- Playwright admin: bar chart Storage Growth render SVG asli (6 bar,
+  1 dengan data nyata), Most Played menampilkan "Yesterday — The
+  Beatles" dari data yang sungguhan direkam
+
+Tidak ada catatan "butuh input manual dari user" untuk sprint ini.
 
 ### Sprint 10 (selesai)
 

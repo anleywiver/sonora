@@ -12,7 +12,7 @@ import (
 )
 
 const createArtist = `-- name: CreateArtist :one
-INSERT INTO artists (id, name, image_url) VALUES ($1, $2, $3) RETURNING id, name, image_url, created_at, updated_at
+INSERT INTO artists (id, name, image_url) VALUES ($1, $2, $3) RETURNING id, name, image_url, created_at, updated_at, musicbrainz_id
 `
 
 type CreateArtistParams struct {
@@ -30,12 +30,13 @@ func (q *Queries) CreateArtist(ctx context.Context, arg CreateArtistParams) (Art
 		&i.ImageUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MusicbrainzID,
 	)
 	return i, err
 }
 
 const getArtistByID = `-- name: GetArtistByID :one
-SELECT id, name, image_url, created_at, updated_at FROM artists WHERE id = $1
+SELECT id, name, image_url, created_at, updated_at, musicbrainz_id FROM artists WHERE id = $1
 `
 
 func (q *Queries) GetArtistByID(ctx context.Context, id pgtype.UUID) (Artist, error) {
@@ -47,12 +48,13 @@ func (q *Queries) GetArtistByID(ctx context.Context, id pgtype.UUID) (Artist, er
 		&i.ImageUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MusicbrainzID,
 	)
 	return i, err
 }
 
 const getArtistByName = `-- name: GetArtistByName :one
-SELECT id, name, image_url, created_at, updated_at FROM artists WHERE name = $1
+SELECT id, name, image_url, created_at, updated_at, musicbrainz_id FROM artists WHERE name = $1
 `
 
 func (q *Queries) GetArtistByName(ctx context.Context, name string) (Artist, error) {
@@ -64,6 +66,24 @@ func (q *Queries) GetArtistByName(ctx context.Context, name string) (Artist, err
 		&i.ImageUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MusicbrainzID,
 	)
 	return i, err
+}
+
+const updateArtistMusicbrainzID = `-- name: UpdateArtistMusicbrainzID :exec
+UPDATE artists SET musicbrainz_id = $2, updated_at = now()
+WHERE id = $1 AND musicbrainz_id IS NULL
+`
+
+type UpdateArtistMusicbrainzIDParams struct {
+	ID            pgtype.UUID `json:"id"`
+	MusicbrainzID *string     `json:"musicbrainz_id"`
+}
+
+// Only fills a still-empty musicbrainz_id — never overwrites a value set
+// by an earlier, possibly more specific match.
+func (q *Queries) UpdateArtistMusicbrainzID(ctx context.Context, arg UpdateArtistMusicbrainzIDParams) error {
+	_, err := q.db.Exec(ctx, updateArtistMusicbrainzID, arg.ID, arg.MusicbrainzID)
+	return err
 }

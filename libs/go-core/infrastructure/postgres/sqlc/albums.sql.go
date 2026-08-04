@@ -14,7 +14,7 @@ import (
 const createAlbum = `-- name: CreateAlbum :one
 INSERT INTO albums (id, artist_id, title, cover_url, released_at)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, artist_id, title, cover_url, released_at, created_at, updated_at
+RETURNING id, artist_id, title, cover_url, released_at, created_at, updated_at, musicbrainz_id
 `
 
 type CreateAlbumParams struct {
@@ -42,12 +42,13 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		&i.ReleasedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MusicbrainzID,
 	)
 	return i, err
 }
 
 const getAlbumByArtistAndTitle = `-- name: GetAlbumByArtistAndTitle :one
-SELECT id, artist_id, title, cover_url, released_at, created_at, updated_at FROM albums WHERE artist_id = $1 AND title = $2
+SELECT id, artist_id, title, cover_url, released_at, created_at, updated_at, musicbrainz_id FROM albums WHERE artist_id = $1 AND title = $2
 `
 
 type GetAlbumByArtistAndTitleParams struct {
@@ -66,12 +67,13 @@ func (q *Queries) GetAlbumByArtistAndTitle(ctx context.Context, arg GetAlbumByAr
 		&i.ReleasedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MusicbrainzID,
 	)
 	return i, err
 }
 
 const getAlbumByID = `-- name: GetAlbumByID :one
-SELECT id, artist_id, title, cover_url, released_at, created_at, updated_at FROM albums WHERE id = $1
+SELECT id, artist_id, title, cover_url, released_at, created_at, updated_at, musicbrainz_id FROM albums WHERE id = $1
 `
 
 func (q *Queries) GetAlbumByID(ctx context.Context, id pgtype.UUID) (Album, error) {
@@ -85,6 +87,7 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id pgtype.UUID) (Album, erro
 		&i.ReleasedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MusicbrainzID,
 	)
 	return i, err
 }
@@ -120,7 +123,7 @@ func (q *Queries) GetAlbumDetail(ctx context.Context, id pgtype.UUID) (GetAlbumD
 }
 
 const listAlbumsByArtist = `-- name: ListAlbumsByArtist :many
-SELECT id, artist_id, title, cover_url, released_at, created_at, updated_at FROM albums WHERE artist_id = $1 ORDER BY released_at DESC NULLS LAST, title ASC
+SELECT id, artist_id, title, cover_url, released_at, created_at, updated_at, musicbrainz_id FROM albums WHERE artist_id = $1 ORDER BY released_at DESC NULLS LAST, title ASC
 `
 
 func (q *Queries) ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) ([]Album, error) {
@@ -140,6 +143,7 @@ func (q *Queries) ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) 
 			&i.ReleasedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MusicbrainzID,
 		); err != nil {
 			return nil, err
 		}
@@ -149,4 +153,25 @@ func (q *Queries) ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateAlbumMusicbrainzAndCover = `-- name: UpdateAlbumMusicbrainzAndCover :exec
+UPDATE albums SET
+  musicbrainz_id = $2,
+  cover_url = COALESCE(cover_url, $3),
+  updated_at = now()
+WHERE id = $1
+`
+
+type UpdateAlbumMusicbrainzAndCoverParams struct {
+	ID            pgtype.UUID `json:"id"`
+	MusicbrainzID *string     `json:"musicbrainz_id"`
+	CoverUrl      *string     `json:"cover_url"`
+}
+
+// musicbrainz_id always fills in; cover_url only fills in if still empty
+// (never overwrites a cover the user or an earlier match already set).
+func (q *Queries) UpdateAlbumMusicbrainzAndCover(ctx context.Context, arg UpdateAlbumMusicbrainzAndCoverParams) error {
+	_, err := q.db.Exec(ctx, updateAlbumMusicbrainzAndCover, arg.ID, arg.MusicbrainzID, arg.CoverUrl)
+	return err
 }

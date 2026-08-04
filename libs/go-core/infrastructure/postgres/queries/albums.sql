@@ -17,3 +17,12 @@ SELECT * FROM albums WHERE artist_id = $1 ORDER BY released_at DESC NULLS LAST, 
 INSERT INTO albums (id, artist_id, title, cover_url, released_at)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
+
+-- name: UpdateAlbumMusicbrainzAndCover :exec
+-- musicbrainz_id always fills in; cover_url only fills in if still empty
+-- (never overwrites a cover the user or an earlier match already set).
+UPDATE albums SET
+  musicbrainz_id = $2,
+  cover_url = COALESCE(cover_url, $3),
+  updated_at = now()
+WHERE id = $1;

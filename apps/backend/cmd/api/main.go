@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/hibiken/asynq"
 
+	appanalytics "sonora.dev/go-core/application/analytics"
 	appauth "sonora.dev/go-core/application/auth"
 	appcatalog "sonora.dev/go-core/application/catalog"
 	apphistory "sonora.dev/go-core/application/history"
@@ -103,6 +104,9 @@ func main() {
 	ingestSourceService := appingestsource.NewService(queries, credentialsBox, userRepo, ingestService, cfg.IngestTmpDir)
 	ingestSourceHandler := handlers.NewIngestSourceHandler(ingestSourceService)
 
+	analyticsService := appanalytics.NewService(queries)
+	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
+
 	catalogService := appcatalog.NewService(queries, credentialsBox, cfg.JWTAccessSecret, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	catalogHandler := handlers.NewCatalogHandler(catalogService)
 
@@ -183,6 +187,8 @@ func main() {
 	adminGroup.Get("/ingest-sources/connections", ingestSourceHandler.List)
 	adminGroup.Delete("/ingest-sources/connections/:id", ingestSourceHandler.Disconnect)
 	adminGroup.Post("/ingest-sources/connections/:id/sync", ingestSourceHandler.Sync)
+	adminGroup.Get("/analytics/top-played", analyticsHandler.TopPlayed)
+	adminGroup.Get("/analytics/storage-growth", analyticsHandler.StorageGrowth)
 
 	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
 	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)
