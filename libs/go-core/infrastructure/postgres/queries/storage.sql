@@ -1,3 +1,6 @@
+-- name: GetStorageAccountByID :one
+SELECT * FROM storage_accounts WHERE id = $1;
+
 -- name: GetActiveStorageAccount :one
 -- Sprint 3: pick the first active account, oldest first. No quota-aware
 -- routing yet — that's Sprint 9 (multi-drive pool).

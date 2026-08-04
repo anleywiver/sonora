@@ -28,6 +28,7 @@ type Querier interface {
 	GetActiveStorageAccount(ctx context.Context) (StorageAccount, error)
 	GetAlbumByArtistAndTitle(ctx context.Context, arg GetAlbumByArtistAndTitleParams) (Album, error)
 	GetAlbumByID(ctx context.Context, id pgtype.UUID) (Album, error)
+	GetAlbumDetail(ctx context.Context, id pgtype.UUID) (GetAlbumDetailRow, error)
 	GetArtistByID(ctx context.Context, id pgtype.UUID) (Artist, error)
 	GetArtistByName(ctx context.Context, name string) (Artist, error)
 	GetIngestJobByID(ctx context.Context, id pgtype.UUID) (IngestJob, error)
@@ -35,10 +36,20 @@ type Querier interface {
 	// Used by the ingest pipeline for dedup before touching storage.
 	GetSongByChecksum(ctx context.Context, checksum string) (Song, error)
 	GetSongByID(ctx context.Context, id pgtype.UUID) (Song, error)
+	// Joined view used by the song detail endpoint and by the stream handler
+	// (needs storage_file_id/provider_file_id/storage_account_id to fetch the
+	// bytes from the storage provider).
+	GetSongDetail(ctx context.Context, id pgtype.UUID) (GetSongDetailRow, error)
+	GetStorageAccountByID(ctx context.Context, id pgtype.UUID) (StorageAccount, error)
 	GetStorageFileByChecksum(ctx context.Context, checksum string) (StorageFile, error)
 	IncrementStorageAccountUsedBytes(ctx context.Context, arg IncrementStorageAccountUsedBytesParams) error
+	ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) ([]Album, error)
+	ListGenres(ctx context.Context) ([]Genre, error)
 	ListIngestJobsByUser(ctx context.Context, arg ListIngestJobsByUserParams) ([]IngestJob, error)
 	ListQueueByUser(ctx context.Context, userID pgtype.UUID) ([]QueueItem, error)
+	// Stand-in for "trending" until play_history exists (Sprint 6) to compute
+	// real play-count trends.
+	ListRecentSongs(ctx context.Context, limit int32) ([]ListRecentSongsRow, error)
 	ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]Song, error)
 	ListSongsByArtist(ctx context.Context, arg ListSongsByArtistParams) ([]Song, error)
 	ListStorageAccounts(ctx context.Context) ([]StorageAccount, error)

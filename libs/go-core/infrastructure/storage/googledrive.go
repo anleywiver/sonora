@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 
 	"golang.org/x/oauth2"
 	googleoauth "golang.org/x/oauth2/google"
@@ -40,4 +41,31 @@ func (p *GoogleDriveProvider) Upload(ctx context.Context, filename, mimeType str
 		return "", fmt.Errorf("storage: drive upload: %w", err)
 	}
 	return created.Id, nil
+}
+
+// Download forwards rangeHeader as-is to Drive's media download endpoint,
+// which honors it the same way any HTTP file server would (206 + a real
+// Content-Range on success). Needed so the stream handler can support
+// seeking in the browser's <audio> element.
+func (p *GoogleDriveProvider) Download(ctx context.Context, providerFileID, rangeHeader string) (*DownloadResult, error) {
+	svc, err := drive.NewService(ctx, option.WithTokenSource(p.tokenSource))
+	if err != nil {
+		return nil, fmt.Errorf("storage: drive client: %w", err)
+	}
+
+	call := svc.Files.Get(providerFileID).Context(ctx)
+	if rangeHeader != "" {
+		call.Header().Set("Range", rangeHeader)
+	}
+	resp, err := call.Download()
+	if err != nil {
+		return nil, fmt.Errorf("storage: drive download: %w", err)
+	}
+
+	return &DownloadResult{
+		Body:          resp.Body,
+		ContentLength: resp.ContentLength,
+		ContentRange:  resp.Header.Get("Content-Range"),
+		Partial:       resp.StatusCode == http.StatusPartialContent,
+	}, nil
 }

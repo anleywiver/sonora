@@ -48,11 +48,93 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 3 selesai — lanjut Sprint 4 (Streaming + Play)
+## Status saat ini: Sprint 4 selesai — lanjut Sprint 5 (Library)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 4 (selesai)
+
+Sprint 4 (Streaming + Play) selesai 100% (2026-08-04). Milestone "upload →
+search → play" diverifikasi nyata pakai headless browser (Playwright di
+Docker, bukan cuma curl) — dua bug asli ketemu & diperbaiki lewat itu
+(lihat di bawah), bukan cuma "compile sukses".
+
+Backend:
+- [x] sqlc query baru: `GetSongDetail` (join artist/album/storage_file),
+      `GetAlbumDetail`, `ListAlbumsByArtist`, `ListGenres`, `ListRecentSongs`,
+      `GetStorageAccountByID`
+- [x] `infrastructure/streamtoken` — token terpisah dari JWT utama (scope
+      1 lagu, TTL 5 menit) untuk `<audio>` yang tidak bisa kirim header
+      `Authorization` (ADR 0001)
+- [x] `storage.Provider.Download` (+ `GoogleDriveProvider.Download`) —
+      forward header `Range` client ke Drive apa adanya, jadi seek di
+      `<audio>` didukung
+- [x] `infrastructure/meilisearch` — wrapper SDK resmi; index `songs`
+      butuh `primaryKey` eksplisit karena field `id`/`artist_id`/`album_id`
+      bikin auto-inference gagal (`index_primary_key_multiple_candidates_found`)
+      — ketemu lewat tes nyata ke Meilisearch, bukan asumsi
+- [x] `application/catalog` — GetSong/GetAlbum/GetArtist/ListAlbumsByArtist/
+      ListGenres/ListRecent, plus IssueStreamToken/ParseStreamToken/Stream
+- [x] `application/search` — wrap Meilisearch untuk `/search` & `/search/autocomplete`;
+      `/search/trending` sementara pakai "recently added" (bukan play-count
+      asli — itu baru ada setelah `play_history` di Sprint 6)
+- [x] Ingest pipeline (Sprint 3) di-wire index ke Meilisearch setelah
+      `CreateSong` — gagal index tidak menggagalkan job (song row sudah durable)
+- [x] Semua endpoint `docs/api-design.md`: `/songs/:id`, `/songs/:id/stream-token`,
+      `/songs/:id/stream` (Range), `/albums/:id`, `/artists/:id`,
+      `/artists/:id/albums`, `/genres`, `/search*`
+
+Frontend (implementasi UI pertama, sebelumnya cuma scaffold):
+- [x] `lucide-react`, `clsx`, `tailwind-merge` ditambahkan; warna semantik
+      (success/warning/error/info) dari `docs/design-system.md` ditambah ke
+      `tailwind.config.ts` (sebelumnya belum ada)
+- [x] `store/auth.ts` — access token di memori saja (bukan localStorage),
+      `store/player.ts` — 1 elemen `<audio>` singleton di `window` biar
+      playback tidak putus saat pindah halaman
+- [x] `app/providers.tsx` — bootstrap sesi via `POST /auth/refresh`
+      (cookie httpOnly) tiap full page load
+- [x] Halaman: `/login` (tombol Google saja — form email/password di
+      screens-spec TIDAK dibangun karena tidak ada endpoint-nya di
+      `docs/api-design.md`, lihat catatan di bawah), `/auth/callback`,
+      `/search`, `/song/[id]`, `/now-playing`, placeholder jujur untuk
+      `/library`, `/favorite`, `/settings` (datanya baru ada Sprint 5-6)
+  Home (`/`) juga masih placeholder — Continue Listening/Trending/dst
+  butuh playlist/favorite/history yang belum ada.
+- [x] `BottomNav` + `MiniPlayer` di root layout, disembunyikan di
+      `/login` dan `/auth/callback`
+
+Dua bug nyata ketemu lewat browser test (Playwright), bukan lewat review
+kode atau unit test:
+1. **Race condition sesi**: `Providers` (root layout, persisten lintas
+   navigasi client-side) menembak `POST /auth/refresh` di setiap mount —
+   tapi kalau mount itu terjadi pas mendarat di `/auth/callback`, refresh
+   yang pasti gagal (belum ada cookie valid) bisa resolve SETELAH callback
+   set token asli dari URL fragment, menghapus token yang baru saja benar.
+   Fix: skip refresh sepenuhnya di `/login` dan `/auth/callback`.
+2. **Pesan error teknis bocor ke UI**: catch block di `player.ts` pakai
+   `e.message` sebagai fallback, tapi `DOMException` dari `<audio>` yang
+   gagal load lolos `instanceof Error` — jadi user lihat "Failed to load
+   because no supported source was found" bukan "Gagal memutar lagu ini."
+   Fix: selalu pakai pesan Indonesia yang ramah, pesan asli cukup di
+   `console.error` untuk debugging.
+
+Alat bantu development (bukan bagian aplikasi):
+- Node/pnpm dijalankan lewat container `node:22-alpine` (bind-mount repo),
+  BUKAN install native — jaringan WSL host kena masalah MTU untuk transfer
+  besar (download >~1MB macet, `go get`/Docker pull tetap jalan normal
+  karena lewat jalur network Docker Desktop yang berbeda). Kalau mau
+  `pnpm`/`next` langsung dari WSL shell, ini perlu dibereskan dulu (coba
+  `ip link set dev eth0 mtu 1400` seperti yang dipakai sesi ini, tapi
+  belum permanen/reboot-proof).
+- Dev server frontend ditinggalkan jalan (container `sonora-frontend`,
+  port 3000) supaya bisa langsung dibuka di browser.
+
+**Butuh input manual dari user**: sama seperti Sprint 3, upload→Drive→stream
+lagu asli belum bisa dites end-to-end tanpa `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`
+dan refresh token Drive asli. Login Google asli juga belum bisa dites
+end-to-end karena alasan yang sama (kode OAuth sudah lengkap sejak Sprint 2).
 
 ### Sprint 3 (selesai)
 

@@ -12,13 +12,16 @@ import (
 	"github.com/hibiken/asynq"
 
 	appauth "sonora.dev/go-core/application/auth"
+	appcatalog "sonora.dev/go-core/application/catalog"
 	appingest "sonora.dev/go-core/application/ingest"
+	appsearch "sonora.dev/go-core/application/search"
 	appstorage "sonora.dev/go-core/application/storageaccount"
 	"sonora.dev/go-core/config"
 	"sonora.dev/go-core/domain/identity"
 	"sonora.dev/go-core/infrastructure/crypto"
 	"sonora.dev/go-core/infrastructure/idempotency"
 	"sonora.dev/go-core/infrastructure/jwt"
+	"sonora.dev/go-core/infrastructure/meilisearch"
 	"sonora.dev/go-core/infrastructure/oauth"
 	"sonora.dev/go-core/infrastructure/postgres"
 	"sonora.dev/go-core/infrastructure/postgres/repository"
@@ -79,11 +82,19 @@ func main() {
 	asynqClient := asynq.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisURL})
 	defer asynqClient.Close()
 
-	ingestService := appingest.NewService(queries, credentialsBox, cfg.GoogleClientID, cfg.GoogleClientSecret)
+	meiliClient := meilisearch.NewClient(cfg.MeilisearchURL, cfg.MeilisearchAPIKey)
+
+	ingestService := appingest.NewService(queries, credentialsBox, meiliClient, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	ingestHandler := handlers.NewIngestHandler(ingestService, asynqClient, idempotencyStore, cfg.IngestTmpDir)
 
 	storageAccountService := appstorage.NewService(queries, credentialsBox)
 	storageAccountHandler := handlers.NewStorageAccountHandler(storageAccountService)
+
+	catalogService := appcatalog.NewService(queries, credentialsBox, cfg.JWTAccessSecret, cfg.GoogleClientID, cfg.GoogleClientSecret)
+	catalogHandler := handlers.NewCatalogHandler(catalogService)
+
+	searchService := appsearch.NewService(meiliClient)
+	searchHandler := handlers.NewSearchHandler(searchService, catalogService)
 
 	requireAuth := middleware.RequireAuth(jwtIssuer)
 	requireOwner := middleware.RequireRole(string(identity.RoleOwner))
@@ -131,6 +142,22 @@ func main() {
 	adminGroup := api.Group("/admin", requireAuth, requireOwner)
 	adminGroup.Post("/storage/accounts", storageAccountHandler.Create)
 	adminGroup.Get("/storage/accounts", storageAccountHandler.List)
+
+	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
+	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)
+	// No requireAuth: the browser <audio> element can't send a custom
+	// Authorization header, so this route is guarded by the stream token
+	// query param instead (ADR 0001).
+	api.Get("/songs/:id/stream", catalogHandler.Stream)
+	api.Get("/albums/:id", requireAuth, catalogHandler.GetAlbum)
+	api.Get("/artists/:id", requireAuth, catalogHandler.GetArtist)
+	api.Get("/artists/:id/albums", requireAuth, catalogHandler.ListArtistAlbums)
+	api.Get("/genres", requireAuth, catalogHandler.ListGenres)
+
+	searchGroup := api.Group("/search", requireAuth)
+	searchGroup.Get("", searchHandler.Search)
+	searchGroup.Get("/autocomplete", searchHandler.Autocomplete)
+	searchGroup.Get("/trending", searchHandler.Trending)
 
 	log.Fatal(app.Listen(":8080"))
 }

@@ -109,6 +109,110 @@ func (q *Queries) GetSongByID(ctx context.Context, id pgtype.UUID) (Song, error)
 	return i, err
 }
 
+const getSongDetail = `-- name: GetSongDetail :one
+SELECT
+  s.id, s.title, s.duration_ms, s.track_number, s.checksum,
+  s.album_id, al.title AS album_title, al.cover_url AS album_cover_url,
+  s.artist_id, ar.name AS artist_name,
+  s.storage_file_id, sf.provider_file_id, sf.mime_type, sf.size_bytes,
+  sf.storage_account_id
+FROM songs s
+JOIN artists ar ON ar.id = s.artist_id
+LEFT JOIN albums al ON al.id = s.album_id
+JOIN storage_files sf ON sf.id = s.storage_file_id
+WHERE s.id = $1
+`
+
+type GetSongDetailRow struct {
+	ID               pgtype.UUID `json:"id"`
+	Title            string      `json:"title"`
+	DurationMs       int32       `json:"duration_ms"`
+	TrackNumber      *int32      `json:"track_number"`
+	Checksum         string      `json:"checksum"`
+	AlbumID          pgtype.UUID `json:"album_id"`
+	AlbumTitle       *string     `json:"album_title"`
+	AlbumCoverUrl    *string     `json:"album_cover_url"`
+	ArtistID         pgtype.UUID `json:"artist_id"`
+	ArtistName       string      `json:"artist_name"`
+	StorageFileID    pgtype.UUID `json:"storage_file_id"`
+	ProviderFileID   string      `json:"provider_file_id"`
+	MimeType         string      `json:"mime_type"`
+	SizeBytes        int64       `json:"size_bytes"`
+	StorageAccountID pgtype.UUID `json:"storage_account_id"`
+}
+
+// Joined view used by the song detail endpoint and by the stream handler
+// (needs storage_file_id/provider_file_id/storage_account_id to fetch the
+// bytes from the storage provider).
+func (q *Queries) GetSongDetail(ctx context.Context, id pgtype.UUID) (GetSongDetailRow, error) {
+	row := q.db.QueryRow(ctx, getSongDetail, id)
+	var i GetSongDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.DurationMs,
+		&i.TrackNumber,
+		&i.Checksum,
+		&i.AlbumID,
+		&i.AlbumTitle,
+		&i.AlbumCoverUrl,
+		&i.ArtistID,
+		&i.ArtistName,
+		&i.StorageFileID,
+		&i.ProviderFileID,
+		&i.MimeType,
+		&i.SizeBytes,
+		&i.StorageAccountID,
+	)
+	return i, err
+}
+
+const listRecentSongs = `-- name: ListRecentSongs :many
+SELECT s.id, s.title, s.artist_id, ar.name AS artist_name, s.album_id, s.duration_ms
+FROM songs s
+JOIN artists ar ON ar.id = s.artist_id
+ORDER BY s.created_at DESC
+LIMIT $1
+`
+
+type ListRecentSongsRow struct {
+	ID         pgtype.UUID `json:"id"`
+	Title      string      `json:"title"`
+	ArtistID   pgtype.UUID `json:"artist_id"`
+	ArtistName string      `json:"artist_name"`
+	AlbumID    pgtype.UUID `json:"album_id"`
+	DurationMs int32       `json:"duration_ms"`
+}
+
+// Stand-in for "trending" until play_history exists (Sprint 6) to compute
+// real play-count trends.
+func (q *Queries) ListRecentSongs(ctx context.Context, limit int32) ([]ListRecentSongsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentSongs, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentSongsRow
+	for rows.Next() {
+		var i ListRecentSongsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.ArtistID,
+			&i.ArtistName,
+			&i.AlbumID,
+			&i.DurationMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSongsByAlbum = `-- name: ListSongsByAlbum :many
 SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at FROM songs WHERE album_id = $1 ORDER BY track_number ASC NULLS LAST, title ASC
 `

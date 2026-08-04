@@ -11,6 +11,7 @@ import (
 	appingest "sonora.dev/go-core/application/ingest"
 	"sonora.dev/go-core/config"
 	"sonora.dev/go-core/infrastructure/crypto"
+	"sonora.dev/go-core/infrastructure/meilisearch"
 	"sonora.dev/go-core/infrastructure/postgres"
 	"sonora.dev/go-core/infrastructure/postgres/sqlc"
 )
@@ -44,7 +45,8 @@ func main() {
 		log.Fatalf("storage credentials box: %v", err)
 	}
 	queries := sqlc.New(pool)
-	ingestService := appingest.NewService(queries, credentialsBox, cfg.GoogleClientID, cfg.GoogleClientSecret)
+	meiliClient := meilisearch.NewClient(cfg.MeilisearchURL, cfg.MeilisearchAPIKey)
+	ingestService := appingest.NewService(queries, credentialsBox, meiliClient, cfg.GoogleClientID, cfg.GoogleClientSecret)
 
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: cfg.RedisURL},

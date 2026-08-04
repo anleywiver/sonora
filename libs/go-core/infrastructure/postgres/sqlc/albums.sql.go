@@ -88,3 +88,65 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id pgtype.UUID) (Album, erro
 	)
 	return i, err
 }
+
+const getAlbumDetail = `-- name: GetAlbumDetail :one
+SELECT al.id, al.title, al.cover_url, al.released_at, al.artist_id, ar.name AS artist_name
+FROM albums al
+JOIN artists ar ON ar.id = al.artist_id
+WHERE al.id = $1
+`
+
+type GetAlbumDetailRow struct {
+	ID         pgtype.UUID `json:"id"`
+	Title      string      `json:"title"`
+	CoverUrl   *string     `json:"cover_url"`
+	ReleasedAt pgtype.Date `json:"released_at"`
+	ArtistID   pgtype.UUID `json:"artist_id"`
+	ArtistName string      `json:"artist_name"`
+}
+
+func (q *Queries) GetAlbumDetail(ctx context.Context, id pgtype.UUID) (GetAlbumDetailRow, error) {
+	row := q.db.QueryRow(ctx, getAlbumDetail, id)
+	var i GetAlbumDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.CoverUrl,
+		&i.ReleasedAt,
+		&i.ArtistID,
+		&i.ArtistName,
+	)
+	return i, err
+}
+
+const listAlbumsByArtist = `-- name: ListAlbumsByArtist :many
+SELECT id, artist_id, title, cover_url, released_at, created_at, updated_at FROM albums WHERE artist_id = $1 ORDER BY released_at DESC NULLS LAST, title ASC
+`
+
+func (q *Queries) ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) ([]Album, error) {
+	rows, err := q.db.Query(ctx, listAlbumsByArtist, artistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Album
+	for rows.Next() {
+		var i Album
+		if err := rows.Scan(
+			&i.ID,
+			&i.ArtistID,
+			&i.Title,
+			&i.CoverUrl,
+			&i.ReleasedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

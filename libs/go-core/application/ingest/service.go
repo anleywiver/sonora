@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -18,6 +19,7 @@ import (
 
 	"sonora.dev/go-core/infrastructure/crypto"
 	"sonora.dev/go-core/infrastructure/mediainfo"
+	"sonora.dev/go-core/infrastructure/meilisearch"
 	"sonora.dev/go-core/infrastructure/postgres/sqlc"
 	"sonora.dev/go-core/infrastructure/storage"
 )
@@ -25,12 +27,13 @@ import (
 type Service struct {
 	q                  *sqlc.Queries
 	box                *crypto.Box
+	search             *meilisearch.Client
 	googleClientID     string
 	googleClientSecret string
 }
 
-func NewService(q *sqlc.Queries, box *crypto.Box, googleClientID, googleClientSecret string) *Service {
-	return &Service{q: q, box: box, googleClientID: googleClientID, googleClientSecret: googleClientSecret}
+func NewService(q *sqlc.Queries, box *crypto.Box, search *meilisearch.Client, googleClientID, googleClientSecret string) *Service {
+	return &Service{q: q, box: box, search: search, googleClientID: googleClientID, googleClientSecret: googleClientSecret}
 }
 
 // Accept records an uploaded file as an ingest job. If a song with this
@@ -290,8 +293,30 @@ func (s *Service) Process(ctx context.Context, jobID uuid.UUID) error {
 	if err := s.q.CompleteIngestJob(ctx, sqlc.CompleteIngestJobParams{ID: toPgUUID(jobID), SongID: song.ID}); err != nil {
 		return fmt.Errorf("ingest: complete job: %w", err)
 	}
+
+	// The song row is the source of truth and is already durable — a search
+	// index hiccup shouldn't fail a completed ingest job.
+	if indexErr := s.indexSong(ctx, song, artist, info.Album); indexErr != nil {
+		log.Printf("ingest: index song %s in search: %v", jobID, indexErr)
+	}
+
 	_ = os.Remove(tempPath)
 	return nil
+}
+
+func (s *Service) indexSong(ctx context.Context, song sqlc.Song, artist sqlc.Artist, albumTitle string) error {
+	doc := meilisearch.SongDocument{
+		ID:         fromPgUUID(song.ID).String(),
+		Title:      song.Title,
+		ArtistID:   fromPgUUID(song.ArtistID).String(),
+		ArtistName: artist.Name,
+		AlbumTitle: albumTitle,
+		DurationMs: int(song.DurationMs),
+	}
+	if song.AlbumID.Valid {
+		doc.AlbumID = fromPgUUID(song.AlbumID).String()
+	}
+	return s.search.IndexSong(ctx, doc)
 }
 
 func (s *Service) uploadToStorage(ctx context.Context, account sqlc.StorageAccount, refreshToken, tempPath, checksum string, sizeBytes int64) (sqlc.StorageFile, error) {

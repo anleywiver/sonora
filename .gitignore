@@ -4,6 +4,8 @@ node_modules/
 dist/
 .turbo/
 *.tsbuildinfo
+.pnpm-store/
+next-env.d.ts
 
 # Go
 *.exe

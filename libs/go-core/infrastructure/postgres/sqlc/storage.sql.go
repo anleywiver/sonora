@@ -116,6 +116,30 @@ func (q *Queries) GetActiveStorageAccount(ctx context.Context) (StorageAccount, 
 	return i, err
 }
 
+const getStorageAccountByID = `-- name: GetStorageAccountByID :one
+SELECT id, provider, label, account_email, credentials_encrypted, quota_bytes, used_bytes, is_active, health_status, last_health_check_at, created_at, updated_at FROM storage_accounts WHERE id = $1
+`
+
+func (q *Queries) GetStorageAccountByID(ctx context.Context, id pgtype.UUID) (StorageAccount, error) {
+	row := q.db.QueryRow(ctx, getStorageAccountByID, id)
+	var i StorageAccount
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.Label,
+		&i.AccountEmail,
+		&i.CredentialsEncrypted,
+		&i.QuotaBytes,
+		&i.UsedBytes,
+		&i.IsActive,
+		&i.HealthStatus,
+		&i.LastHealthCheckAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getStorageFileByChecksum = `-- name: GetStorageFileByChecksum :one
 SELECT id, storage_account_id, provider_file_id, checksum, size_bytes, mime_type, created_at FROM storage_files WHERE checksum = $1
 `
