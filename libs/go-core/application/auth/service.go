@@ -130,6 +130,13 @@ func (s *Service) createUser(ctx context.Context, profile *oauth.GoogleProfile) 
 
 // Refresh rotates the refresh token: the presented one is revoked and a new
 // pair is issued, bound to the same device.
+//
+// A presented token that was already revoked (as opposed to merely
+// expired) is a reuse signal — a rotated-out token being replayed, which
+// only happens if it leaked and two parties are racing to use it. Sprint
+// 12 hardening (ADR 0006): that case revokes every session the user has,
+// not just this one request, since we can no longer tell which of the
+// two parties is legitimate.
 func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*TokenPair, error) {
 	existing, err := s.tokens.FindByHash(ctx, hashToken(rawRefreshToken))
 	if err != nil {
@@ -137,6 +144,12 @@ func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*TokenPa
 			return nil, ErrInvalidRefreshToken
 		}
 		return nil, err
+	}
+	if existing.RevokedAt != nil {
+		if revokeErr := s.tokens.RevokeAllForUser(ctx, existing.UserID, time.Now()); revokeErr != nil {
+			return nil, revokeErr
+		}
+		return nil, ErrRefreshTokenReused
 	}
 	if !existing.IsValid(time.Now()) {
 		return nil, ErrInvalidRefreshToken

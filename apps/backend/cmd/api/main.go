@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/hibiken/asynq"
@@ -144,10 +145,18 @@ func main() {
 
 	app.Use(requestid.New())
 	app.Use(logger.New())
+	// Sprint 12 (ADR 0006): origins come from config, not a hardcoded dev
+	// string, so a real VPS deploy with real domains just works via .env.
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:3000,http://localhost:3001",
+		AllowOrigins:     cfg.FrontendURL + "," + cfg.AdminURL,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
+	}))
+	// Sprint 12 (ADR 0006): generous global ceiling — a safety net against
+	// a looping/buggy client, not a real usage limit for personal scale.
+	app.Use(limiter.New(limiter.Config{
+		Max:        300,
+		Expiration: time.Minute,
 	}))
 
 	// Health check - dipakai Docker Compose healthcheck & CI smoke test
@@ -160,10 +169,18 @@ func main() {
 
 	api := app.Group("/api/v1")
 
+	// Sprint 12 (ADR 0006): stricter limit on the public, unauthenticated
+	// auth endpoints — the most realistic brute-force/credential-stuffing
+	// target even at personal scale.
+	authLimiter := limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: time.Minute,
+	})
+
 	authGroup := api.Group("/auth")
-	authGroup.Get("/google", authHandler.GoogleLogin)
-	authGroup.Get("/google/callback", authHandler.GoogleCallback)
-	authGroup.Post("/refresh", authHandler.Refresh)
+	authGroup.Get("/google", authLimiter, authHandler.GoogleLogin)
+	authGroup.Get("/google/callback", authLimiter, authHandler.GoogleCallback)
+	authGroup.Post("/refresh", authLimiter, authHandler.Refresh)
 	authGroup.Post("/logout", requireAuth, authHandler.Logout)
 	authGroup.Post("/logout-all", requireAuth, requireOwner, authHandler.LogoutAll)
 	authGroup.Get("/me", requireAuth, authHandler.Me)

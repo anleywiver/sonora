@@ -48,11 +48,55 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 11 selesai — lanjut Sprint 12 (Security hardening)
+## Status saat ini: Sprint 12 selesai — lanjut Sprint 13 (Observability & DR)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 12 (selesai)
+
+Sprint 12 (Security hardening) selesai 100% (2026-08-05). Keputusan
+konkret (threshold rate limit, semantik reuse detection, sumber CORS)
+didokumentasikan di `docs/decisions/0006-sprint12-security-hardening.md`.
+Tidak butuh input manual dari user — semua bisa diverifikasi langsung.
+
+- [x] **Enkripsi credential AES-256** — sudah selesai sejak Sprint 3
+      (`crypto.Box`, AES-256-GCM), dipakai lagi untuk
+      `ingest_source_connections` di Sprint 10. Item roadmap ini
+      diverifikasi ulang, bukan ditulis ulang.
+- [x] **Rate limit** — `gofiber/fiber/v2/middleware/limiter` (in-memory,
+      cukup untuk 1 proses/1 VPS): global 300 req/menit per IP di semua
+      `/api/v1/*`, plus limiter lebih ketat (10 req/menit per IP) khusus
+      di endpoint publik tanpa auth (`/auth/google`, `/auth/google/callback`,
+      `/auth/refresh`) — target paling masuk akal untuk brute-force
+      meski skala personal
+- [x] **Refresh token reuse detection** — rotasi (Sprint 2) sekarang
+      membedakan token yang expired wajar vs token yang SUDAH PERNAH
+      dipakai/di-revoke sebelumnya (reuse). Kasus reuse memicu
+      `RevokeAllForUser` — bukan cuma menolak request itu, tapi
+      mem-invalidasi SEMUA sesi user itu (termasuk token hasil rotasi
+      yang seharusnya masih valid), standar industri untuk rotating
+      refresh token
+- [x] **CORS lock down** — `AllowOrigins` sekarang dirangkai dari
+      `cfg.FrontendURL` + `cfg.AdminURL` (env var yang sudah ada sejak
+      Sprint 9), bukan string hardcoded `localhost:3000,3001` —
+      otomatis benar saat deploy ke domain VPS asli
+
+Diverifikasi nyata lewat curl (bukan cuma baca kode):
+- Rate limit: 15 request beruntun ke `/auth/google` → 8 pertama `302`,
+  sisanya `429` — limiter beneran memotong di angka yang tepat
+- CORS: preflight dari `Origin: http://localhost:3000` dapat header
+  `Access-Control-Allow-Origin` yang cocok; dari `Origin:
+  http://evil.example.com` header itu TIDAK ADA sama sekali (ditolak
+  browser secara implisit)
+- Refresh reuse: seed 1 refresh token asli → pakai sekali (sukses, dapat
+  token baru) → pakai lagi token LAMA yang sama (401, sesuai ekspektasi)
+  → cek token BARU dari langkah pertama (yang seharusnya masih berlaku)
+  → JUGA 401, membuktikan `RevokeAllForUser` benar-benar menuntaskan
+  semua sesi, bukan cuma menolak satu request. Log server mengonfirmasi
+  `auth: refresh token reuse detected, all sessions revoked` tercatat
+  di kedua percobaan reuse.
 
 ### Sprint 11 (selesai)
 

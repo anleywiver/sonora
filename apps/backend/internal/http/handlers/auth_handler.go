@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -123,6 +124,10 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	pair, err := h.service.Refresh(c.Context(), raw)
 	if err != nil {
 		h.clearRefreshCookie(c)
+		if errors.Is(err, appauth.ErrRefreshTokenReused) {
+			log.Printf("auth: refresh token reuse detected, all sessions revoked (request_id=%s)", c.Locals("requestid"))
+			return response.Fail(c, fiber.StatusUnauthorized, "unauthenticated", "invalid or expired refresh token")
+		}
 		if errors.Is(err, appauth.ErrInvalidRefreshToken) {
 			return response.Fail(c, fiber.StatusUnauthorized, "unauthenticated", "invalid or expired refresh token")
 		}
