@@ -150,6 +150,28 @@ func (s *Service) HealthCheck(ctx context.Context, id uuid.UUID) (*Account, erro
 	return fromRow(updated), nil
 }
 
+// RunHealthChecks health-checks every active account, best-effort — one
+// account's failure doesn't stop the others. Called manually today (per-
+// account, Drive Manager's "Run health check" button) and automatically
+// by Sprint 10's weekly storage optimizer job, so quota-aware routing
+// (application/ingest) always has reasonably fresh numbers to route by.
+func (s *Service) RunHealthChecks(ctx context.Context) (checked int, failed int) {
+	rows, err := s.q.ListStorageAccounts(ctx)
+	if err != nil {
+		return 0, 0
+	}
+	for _, row := range rows {
+		if !row.IsActive {
+			continue
+		}
+		checked++
+		if _, err := s.HealthCheck(ctx, uuid.UUID(row.ID.Bytes)); err != nil {
+			failed++
+		}
+	}
+	return checked, failed
+}
+
 func fromRow(row sqlc.StorageAccount) *Account {
 	email := ""
 	if row.AccountEmail != nil {

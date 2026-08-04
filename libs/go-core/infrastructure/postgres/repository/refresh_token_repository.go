@@ -64,6 +64,11 @@ func (r *RefreshTokenRepository) RevokeAllForDevice(ctx context.Context, deviceI
 		Update("revoked_at", revokedAt).Error
 }
 
+func (r *RefreshTokenRepository) DeleteExpired(ctx context.Context, before time.Time) (int64, error) {
+	result := r.db.WithContext(ctx).Where("expires_at < ?", before).Delete(&models.RefreshToken{})
+	return result.RowsAffected, result.Error
+}
+
 func refreshTokenFromModel(row models.RefreshToken) identity.RefreshToken {
 	return identity.RefreshToken{
 		ID:        row.ID,

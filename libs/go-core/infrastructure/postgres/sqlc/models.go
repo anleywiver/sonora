@@ -62,6 +62,18 @@ type IngestJob struct {
 	TempPath     *string            `json:"temp_path"`
 }
 
+type IngestSourceConnection struct {
+	ID                   pgtype.UUID        `json:"id"`
+	Provider             string             `json:"provider"`
+	Label                string             `json:"label"`
+	AccountEmail         *string            `json:"account_email"`
+	CredentialsEncrypted string             `json:"credentials_encrypted"`
+	IsActive             bool               `json:"is_active"`
+	LastSyncedAt         pgtype.Timestamptz `json:"last_synced_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Lyric struct {
 	ID            pgtype.UUID        `json:"id"`
 	SongID        pgtype.UUID        `json:"song_id"`

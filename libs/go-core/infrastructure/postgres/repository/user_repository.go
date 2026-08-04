@@ -66,6 +66,22 @@ func (r *UserRepository) Count(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+func (r *UserRepository) FindOwner(ctx context.Context) (*identity.User, error) {
+	var row models.User
+	err := r.db.WithContext(ctx).
+		Where("role = ?", models.UserRoleOwner).
+		Order("created_at ASC").
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, identity.ErrNotFound
+		}
+		return nil, err
+	}
+	user := userFromModel(row)
+	return &user, nil
+}
+
 func userFromModel(row models.User) identity.User {
 	return identity.User{
 		ID:        row.ID,

@@ -92,6 +92,8 @@ Base URL: `https://api.sonora.local/api/v1` (dev) — semua endpoint di bawah re
 | GET | `/admin/dashboard` |
 | GET/POST/DELETE | `/admin/storage/accounts[/:id]` |
 | POST | `/admin/storage/accounts/:id/health-check` |
+| GET/POST/DELETE | `/admin/ingest-sources/connections[/:id]` (Sprint 10, ADR 0004) |
+| POST | `/admin/ingest-sources/connections/:id/sync` |
 | GET/POST | `/admin/jobs`, `/admin/jobs/:id/retry` |
 | GET/PATCH | `/admin/lyrics-providers[/:id]` |
 | GET | `/admin/analytics/top-played`, `/admin/analytics/storage-growth` |

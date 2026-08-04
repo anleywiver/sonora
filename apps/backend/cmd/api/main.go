@@ -16,6 +16,7 @@ import (
 	appcatalog "sonora.dev/go-core/application/catalog"
 	apphistory "sonora.dev/go-core/application/history"
 	appingest "sonora.dev/go-core/application/ingest"
+	appingestsource "sonora.dev/go-core/application/ingestsource"
 	applibrary "sonora.dev/go-core/application/library"
 	applyrics "sonora.dev/go-core/application/lyrics"
 	appplayback "sonora.dev/go-core/application/playback"
@@ -99,6 +100,9 @@ func main() {
 	storageAccountService := appstorage.NewService(queries, credentialsBox, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	storageAccountHandler := handlers.NewStorageAccountHandler(storageAccountService)
 
+	ingestSourceService := appingestsource.NewService(queries, credentialsBox, userRepo, ingestService, cfg.IngestTmpDir)
+	ingestSourceHandler := handlers.NewIngestSourceHandler(ingestSourceService)
+
 	catalogService := appcatalog.NewService(queries, credentialsBox, cfg.JWTAccessSecret, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	catalogHandler := handlers.NewCatalogHandler(catalogService)
 
@@ -175,6 +179,10 @@ func main() {
 	adminGroup.Get("/storage/accounts", storageAccountHandler.List)
 	adminGroup.Delete("/storage/accounts/:id", storageAccountHandler.Delete)
 	adminGroup.Post("/storage/accounts/:id/health-check", storageAccountHandler.HealthCheck)
+	adminGroup.Post("/ingest-sources/connections", ingestSourceHandler.Connect)
+	adminGroup.Get("/ingest-sources/connections", ingestSourceHandler.List)
+	adminGroup.Delete("/ingest-sources/connections/:id", ingestSourceHandler.Disconnect)
+	adminGroup.Post("/ingest-sources/connections/:id/sync", ingestSourceHandler.Sync)
 
 	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
 	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)

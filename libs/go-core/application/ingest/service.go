@@ -36,23 +36,25 @@ func NewService(q *sqlc.Queries, box *crypto.Box, search *meilisearch.Client, go
 	return &Service{q: q, box: box, search: search, googleClientID: googleClientID, googleClientSecret: googleClientSecret}
 }
 
-// Accept records an uploaded file as an ingest job. If a song with this
-// checksum already exists, the job completes immediately (dedup) and the
-// temp file is discarded — no background processing needed. The caller
-// (HTTP handler) should only enqueue the Asynq "ingest:process" task when
-// the returned job's Status is "pending".
-func (s *Service) Accept(ctx context.Context, userID uuid.UUID, tempPath, checksum string) (*Job, error) {
+// Accept records an uploaded/fetched file as an ingest job. If a song with
+// this checksum already exists, the job completes immediately (dedup) and
+// the temp file is discarded — no background processing needed. The
+// caller should only enqueue the Asynq "ingest:process" task when the
+// returned job's Status is "pending". sourceType must be one of the
+// ingest_jobs.source_type CHECK values ("manual_upload", "bandcamp",
+// "cloud_sync" — see CLAUDE.md's legal-source constraint).
+func (s *Service) Accept(ctx context.Context, userID uuid.UUID, sourceType, tempPath, checksum string) (*Job, error) {
 	if existing, err := s.q.GetSongByChecksum(ctx, checksum); err == nil {
 		_ = os.Remove(tempPath)
-		return s.createJobRow(ctx, userID, "completed", existing.ID, nil)
+		return s.createJobRow(ctx, userID, sourceType, "completed", existing.ID, nil)
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("ingest: check checksum: %w", err)
 	}
 
-	return s.createJobRow(ctx, userID, "pending", pgtype.UUID{}, &tempPath)
+	return s.createJobRow(ctx, userID, sourceType, "pending", pgtype.UUID{}, &tempPath)
 }
 
-func (s *Service) createJobRow(ctx context.Context, userID uuid.UUID, status string, songID pgtype.UUID, tempPath *string) (*Job, error) {
+func (s *Service) createJobRow(ctx context.Context, userID uuid.UUID, sourceType, status string, songID pgtype.UUID, tempPath *string) (*Job, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
 		return nil, fmt.Errorf("ingest: generate job id: %w", err)
@@ -60,7 +62,7 @@ func (s *Service) createJobRow(ctx context.Context, userID uuid.UUID, status str
 	row, err := s.q.CreateIngestJob(ctx, sqlc.CreateIngestJobParams{
 		ID:         toPgUUID(id),
 		UserID:     toPgUUID(userID),
-		SourceType: "manual_upload",
+		SourceType: sourceType,
 		Status:     status,
 		SongID:     songID,
 		TempPath:   tempPath,

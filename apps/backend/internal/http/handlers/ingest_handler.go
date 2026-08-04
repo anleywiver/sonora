@@ -96,7 +96,7 @@ func (h *IngestHandler) Upload(c *fiber.Ctx) error {
 	dst.Close()
 	checksum := hex.EncodeToString(hasher.Sum(nil))
 
-	job, err := h.service.Accept(c.Context(), userID, tempPath, checksum)
+	job, err := h.service.Accept(c.Context(), userID, "manual_upload", tempPath, checksum)
 	if err != nil {
 		_ = os.Remove(tempPath)
 		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to accept upload")

@@ -30,4 +30,8 @@ type RefreshTokenRepository interface {
 	Revoke(ctx context.Context, id uuid.UUID, revokedAt time.Time) error
 	RevokeAllForUser(ctx context.Context, userID uuid.UUID, revokedAt time.Time) error
 	RevokeAllForDevice(ctx context.Context, deviceID uuid.UUID, revokedAt time.Time) error
+	// DeleteExpired removes rows past their expiry regardless of revoked
+	// state — Sprint 10 garbage collector housekeeping, not a security
+	// control (that's Sprint 12).
+	DeleteExpired(ctx context.Context, before time.Time) (int64, error)
 }

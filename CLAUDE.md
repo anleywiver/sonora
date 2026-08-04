@@ -48,11 +48,93 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 9 selesai — lanjut Sprint 10 (Scheduled jobs)
+## Status saat ini: Sprint 10 selesai — lanjut Sprint 11 (Polish ingest)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 10 (selesai)
+
+Sprint 10 (Scheduled jobs) selesai 100% (2026-08-05). `docs/api-design.md`
+tidak punya spesifikasi apapun untuk bagian ini — semua keputusan desain
+baru (skema tabel, pola credential, scope Bandcamp/Dropbox) didokumentasikan
+di `docs/decisions/0004-sprint10-scheduled-jobs-and-ingest-sources.md`
+sebelum coding, sesuai filosofi "ADR untuk keputusan arsitektur signifikan".
+
+Scheduler infra:
+- [x] `asynq.Scheduler` jalan sebagai goroutine tambahan di proses
+      `worker` yang sama (bukan proses/deployment terpisah — 1 VPS,
+      jangan over-engineer)
+- [x] **Garbage Collector** (harian 03:00): hapus file temp ingest untuk
+      job `completed` (file sudah di storage, tidak dibutuhkan lagi) —
+      SENGAJA tidak menyentuh `temp_path` job `failed` (retry butuh itu);
+      plus purge `refresh_tokens` yang sudah expired
+- [x] **Storage Optimizer** (mingguan, Minggu 04:00): jalankan health
+      check ke SEMUA storage account aktif otomatis (`RunHealthChecks`,
+      reuse logic tombol manual Drive Manager Sprint 9) — data quota
+      routing (Sprint 9) tetap segar tanpa Owner harus klik manual
+
+Ingest source connections (Bandcamp/cloud sync):
+- [x] Migration `000005` — tabel `ingest_source_connections` (bentuk
+      sengaja disamakan dengan `storage_accounts`: `credentials_encrypted`
+      lewat `crypto.Box` yang sama), dikelola Owner & global (bukan
+      per-user) — konsisten dengan penempatan halaman admin "Ingest
+      Sources" di `docs/screens-spec.md`
+- [x] `infrastructure/bandcamp` — client fancollection API (endpoint yang
+      dipakai aplikasi resmi Bandcamp sendiri untuk redownload koleksi),
+      credential = cookie `identity` + `fan_id` didapat manual di luar
+      aplikasi (pola sama dengan refresh token Drive, ADR 0002). Item tipe
+      "album" (zip multi-track) SENGAJA tidak didukung v1 — di-skip
+      dengan log jelas, cuma track tunggal yang di-download
+- [x] `infrastructure/dropbox` — client OAuth refresh-token (pola sama
+      dengan Drive), `list_folder` + `download`, filter ekstensi audio.
+      SATU-SATUNYA implementasi `cloud_sync` konkret (OneDrive/iCloud
+      backlog, bukan penyimpangan — `source_type` tetap generik)
+- [x] `application/ingestsource` — Connect/List/Disconnect/Sync/SyncAll;
+      `ingest.Service.Accept` diperluas terima `sourceType` (sebelumnya
+      hardcoded `manual_upload`); download hasil sync masuk pipeline
+      Accept → Process yang SAMA PERSIS dengan upload manual — dedup by
+      checksum yang sudah ada sejak Sprint 3 bikin sync idempoten tanpa
+      butuh tabel "item sudah diproses" baru
+      hasil sync di-attribute ke user Owner (`identity.FindOwner`,
+      asumsi single-owner personal deployment dari Sprint 2)
+- [x] `POST/GET/DELETE /admin/ingest-sources/connections[/:id]`,
+      `POST .../sync` (Owner only) — endpoint terakhir yang ditambahkan
+      ke `docs/api-design.md` Admin section
+- [x] Admin frontend `/ingest-sources` — dari placeholder read-only
+      (Sprint 9) jadi fungsional penuh: connect form (pilih provider,
+      field beda per provider), list dengan status + last synced, tombol
+      "Sync now" dan disconnect
+
+Diverifikasi jauh lebih nyata dari yang diperkirakan — Bandcamp dan
+Dropbox client BENERAN memanggil API asli lewat internet (bukan mock):
+- GC: file temp asli dibuat di volume `ingest_tmp` bersama, job
+  `completed` + refresh token expired asli di-seed ke DB, dijalankan lewat
+  Asynq real (enqueue manual ke Redis) → file hilang dari disk,
+  `temp_path` ter-null, refresh token terhapus — dikonfirmasi lewat cek
+  langsung ke volume & DB, bukan cuma baca log
+- Storage Optimizer: dijalankan nyata, benar meng-iterasi akun aktif dan
+  melaporkan hasil (gagal pada 1 akun test dengan credential rusak
+  sengaja — perilaku benar, bukan bug)
+- Bandcamp: `POST bandcamp.com/api/fancollection/1/collection_items`
+  BENERAN terhubung ke internet dari container, balas 200 dengan koleksi
+  kosong (cookie palsu) — tidak crash, sync selesai tanpa item, sesuai
+  desain
+- Dropbox: `POST api.dropboxapi.com/oauth2/token` BENERAN ditolak server
+  Dropbox asli (`invalid_client: Invalid client_id or client_secret`),
+  error itu diteruskan bersih ke response API — pola "gagal dengan pesan
+  jelas" yang sama seperti Drive sejak Sprint 3, sekarang terbukti dengan
+  2 provider tambahan
+- Playwright admin: connect Bandcamp → card muncul "Never synced" →
+  klik Sync now → benar update jadi "Last synced ..." (real API call
+  seperti di atas) → disconnect → card hilang
+
+**Butuh input manual dari user** (pola sama seperti Drive Sprint 3/4):
+cookie `identity` + `fan_id` Bandcamp asli, dan `refresh_token`/`app_key`/
+`app_secret` OAuth Dropbox asli, keduanya belum ada. Kode connect/sync
+lengkap dan gagal dengan rapi tanpa itu (dikonfirmasi di atas), bukan
+crash.
 
 ### Sprint 9 (selesai)
 

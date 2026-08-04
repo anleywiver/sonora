@@ -11,6 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearIngestJobTempPath = `-- name: ClearIngestJobTempPath :exec
+UPDATE ingest_jobs SET temp_path = NULL, updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) ClearIngestJobTempPath(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearIngestJobTempPath, id)
+	return err
+}
+
 const completeIngestJob = `-- name: CompleteIngestJob :exec
 UPDATE ingest_jobs SET status = 'completed', song_id = $2, temp_path = NULL, updated_at = now() WHERE id = $1
 `
@@ -114,6 +123,38 @@ func (q *Queries) GetIngestJobByID(ctx context.Context, id pgtype.UUID) (IngestJ
 		&i.TempPath,
 	)
 	return i, err
+}
+
+const listCompletedIngestJobsWithTempPath = `-- name: ListCompletedIngestJobsWithTempPath :many
+SELECT id, temp_path FROM ingest_jobs WHERE status = 'completed' AND temp_path IS NOT NULL LIMIT $1
+`
+
+type ListCompletedIngestJobsWithTempPathRow struct {
+	ID       pgtype.UUID `json:"id"`
+	TempPath *string     `json:"temp_path"`
+}
+
+// Sprint 10 garbage collector target: completed jobs still holding a
+// temp_path. Deliberately excludes 'failed' jobs — RetryJob needs that
+// file to still be on disk.
+func (q *Queries) ListCompletedIngestJobsWithTempPath(ctx context.Context, limit int32) ([]ListCompletedIngestJobsWithTempPathRow, error) {
+	rows, err := q.db.Query(ctx, listCompletedIngestJobsWithTempPath, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCompletedIngestJobsWithTempPathRow
+	for rows.Next() {
+		var i ListCompletedIngestJobsWithTempPathRow
+		if err := rows.Scan(&i.ID, &i.TempPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listIngestJobsByUser = `-- name: ListIngestJobsByUser :many

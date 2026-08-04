@@ -12,18 +12,21 @@ import (
 
 type Querier interface {
 	AddQueueItem(ctx context.Context, arg AddQueueItemParams) (QueueItem, error)
+	ClearIngestJobTempPath(ctx context.Context, id pgtype.UUID) error
 	ClearQueue(ctx context.Context, userID pgtype.UUID) error
 	CompleteIngestJob(ctx context.Context, arg CompleteIngestJobParams) error
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
 	CreateHistoryEntry(ctx context.Context, arg CreateHistoryEntryParams) (PlayHistory, error)
 	CreateIngestJob(ctx context.Context, arg CreateIngestJobParams) (IngestJob, error)
+	CreateIngestSourceConnection(ctx context.Context, arg CreateIngestSourceConnectionParams) (IngestSourceConnection, error)
 	CreateLyrics(ctx context.Context, arg CreateLyricsParams) (Lyric, error)
 	CreateLyricsProvider(ctx context.Context, arg CreateLyricsProviderParams) (LyricsProvider, error)
 	CreateSong(ctx context.Context, arg CreateSongParams) (Song, error)
 	CreateStorageAccount(ctx context.Context, arg CreateStorageAccountParams) (StorageAccount, error)
 	CreateStorageFile(ctx context.Context, arg CreateStorageFileParams) (StorageFile, error)
 	DeleteIngestJob(ctx context.Context, arg DeleteIngestJobParams) (int64, error)
+	DeleteIngestSourceConnection(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteSong(ctx context.Context, id pgtype.UUID) error
 	DeleteStorageAccount(ctx context.Context, id pgtype.UUID) (int64, error)
 	FailIngestJob(ctx context.Context, arg FailIngestJobParams) error
@@ -38,6 +41,7 @@ type Querier interface {
 	GetArtistByID(ctx context.Context, id pgtype.UUID) (Artist, error)
 	GetArtistByName(ctx context.Context, name string) (Artist, error)
 	GetIngestJobByID(ctx context.Context, id pgtype.UUID) (IngestJob, error)
+	GetIngestSourceConnectionByID(ctx context.Context, id pgtype.UUID) (IngestSourceConnection, error)
 	GetLyricsBySongID(ctx context.Context, songID pgtype.UUID) (Lyric, error)
 	GetLyricsProviderByName(ctx context.Context, name string) (LyricsProvider, error)
 	GetPlaybackState(ctx context.Context, userID pgtype.UUID) (PlaybackState, error)
@@ -51,13 +55,19 @@ type Querier interface {
 	GetStorageAccountByID(ctx context.Context, id pgtype.UUID) (StorageAccount, error)
 	GetStorageFileByChecksum(ctx context.Context, checksum string) (StorageFile, error)
 	IncrementStorageAccountUsedBytes(ctx context.Context, arg IncrementStorageAccountUsedBytesParams) error
+	ListActiveIngestSourceConnections(ctx context.Context) ([]IngestSourceConnection, error)
 	ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) ([]Album, error)
+	// Sprint 10 garbage collector target: completed jobs still holding a
+	// temp_path. Deliberately excludes 'failed' jobs — RetryJob needs that
+	// file to still be on disk.
+	ListCompletedIngestJobsWithTempPath(ctx context.Context, limit int32) ([]ListCompletedIngestJobsWithTempPathRow, error)
 	// Most recent play per song, excluding songs barely started or basically
 	// finished (both would be noise in a "continue listening" widget).
 	ListContinueListening(ctx context.Context, arg ListContinueListeningParams) ([]ListContinueListeningRow, error)
 	ListGenres(ctx context.Context) ([]Genre, error)
 	ListHistoryByUser(ctx context.Context, arg ListHistoryByUserParams) ([]PlayHistory, error)
 	ListIngestJobsByUser(ctx context.Context, arg ListIngestJobsByUserParams) ([]IngestJob, error)
+	ListIngestSourceConnections(ctx context.Context) ([]IngestSourceConnection, error)
 	ListQueueByUser(ctx context.Context, userID pgtype.UUID) ([]QueueItem, error)
 	// Stand-in for "trending" until play_history exists (Sprint 6) to compute
 	// real play-count trends.
@@ -68,6 +78,7 @@ type Querier interface {
 	MarkIngestJobProcessing(ctx context.Context, id pgtype.UUID) error
 	RemoveQueueItem(ctx context.Context, arg RemoveQueueItemParams) error
 	ResetIngestJobToPending(ctx context.Context, id pgtype.UUID) error
+	UpdateIngestSourceConnectionSync(ctx context.Context, arg UpdateIngestSourceConnectionSyncParams) error
 	UpdateQueueItemPosition(ctx context.Context, arg UpdateQueueItemPositionParams) (int64, error)
 	UpdateStorageAccountHealth(ctx context.Context, arg UpdateStorageAccountHealthParams) error
 	UpsertPlaybackState(ctx context.Context, arg UpsertPlaybackStateParams) (PlaybackState, error)

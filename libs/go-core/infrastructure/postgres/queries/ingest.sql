@@ -31,3 +31,12 @@ UPDATE ingest_jobs SET status = 'pending', error_message = NULL, updated_at = no
 
 -- name: DeleteIngestJob :execrows
 DELETE FROM ingest_jobs WHERE id = $1 AND user_id = $2;
+
+-- name: ListCompletedIngestJobsWithTempPath :many
+-- Sprint 10 garbage collector target: completed jobs still holding a
+-- temp_path. Deliberately excludes 'failed' jobs — RetryJob needs that
+-- file to still be on disk.
+SELECT id, temp_path FROM ingest_jobs WHERE status = 'completed' AND temp_path IS NOT NULL LIMIT $1;
+
+-- name: ClearIngestJobTempPath :exec
+UPDATE ingest_jobs SET temp_path = NULL, updated_at = now() WHERE id = $1;

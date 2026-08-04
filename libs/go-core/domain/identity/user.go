@@ -32,4 +32,9 @@ type UserRepository interface {
 	FindByGoogleID(ctx context.Context, googleID string) (*User, error)
 	Create(ctx context.Context, user *User) error
 	Count(ctx context.Context) (int64, error)
+	// FindOwner returns the oldest Owner user — scheduled jobs that aren't
+	// tied to an HTTP request (Bandcamp/cloud sync sync) attribute their
+	// ingest_jobs rows to this user, per the single-owner personal
+	// deployment assumption from Sprint 2 (see ADR 0004).
+	FindOwner(ctx context.Context) (*User, error)
 }
