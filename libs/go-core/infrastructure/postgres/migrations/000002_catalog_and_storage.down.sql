@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS lyrics;
+DROP TABLE IF EXISTS lyrics_providers;
+DROP TABLE IF EXISTS song_genres;
+DROP TABLE IF EXISTS genres;
+DROP TABLE IF EXISTS songs;
+DROP TABLE IF EXISTS albums;
+DROP TABLE IF EXISTS artists;
+DROP TABLE IF EXISTS storage_files;
+DROP TABLE IF EXISTS storage_accounts;
