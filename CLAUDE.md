@@ -48,27 +48,34 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 1 (Foundation)
+## Status saat ini: Sprint 1 selesai — lanjut Sprint 2 (Auth)
 
-Selesai:
-- [x] Monorepo scaffold (Turborepo + `go.work`)
+Sprint 1 selesai 100% (2026-08-04):
+- [x] Monorepo scaffold (Turborepo + `go.work`), repo di-`git init` (sebelumnya belum ada `.git` sama sekali)
 - [x] Next.js frontend & admin scaffold (design tokens sudah terpasang di `tailwind.config.ts`)
 - [x] Fiber API skeleton (`/health` jalan)
 - [x] Asynq worker skeleton
-- [x] Docker Compose (semua service `healthy`, sudah diverifikasi jalan)
-- [x] CI workflow skeleton
-- [x] Migration SQL lengkap (6 file, 19 tabel)
-- [x] sqlc query dasar (`songs.sql`, `playback.sql`)
-- [x] GORM model dasar (`identity.go`, `library.go`)
-- [x] Config loader (`libs/go-core/config`), sudah di-wire ke `api` dan `worker`
+- [x] Migration SQL lengkap (6 file, 19 tabel) — `libs/go-core/infrastructure/postgres/migrations/`
+- [x] sqlc query dasar (`songs.sql`, `playback.sql`) + `sqlc generate` sudah dijalankan (output di `.../postgres/sqlc/`)
+- [x] GORM model dasar (`identity.go`, `library.go`) — `libs/go-core/infrastructure/postgres/models/`
+- [x] Config loader (`libs/go-core/config`), di-wire ke `api` dan `worker`
+- [x] Koneksi Postgres (pgx pool + GORM) di-wire ke `main.go` `api` dan `worker`
+- [x] Migration diterapkan ke database (`schema_migrations` + 19 tabel terverifikasi)
+- [x] Docker Compose — semua service `healthy`, `/health` return 200, diverifikasi end-to-end
 
-**Belum selesai (lanjutkan ini dulu):**
-- [ ] Jalankan `sqlc generate` di `libs/go-core/infrastructure/postgres/` (generate Go code dari `queries/*.sql`)
-- [ ] Wire koneksi Postgres (pgx) + GORM ke `main.go` `api` dan `worker` (pakai `cfg.DatabaseURL`)
-- [ ] Apply migration ke database: `migrate -path libs/go-core/infrastructure/postgres/migrations -database "$DATABASE_URL" up`
-- [ ] Verifikasi `docker compose up` masih jalan sehat setelah semua wiring di atas
+Catatan koreksi: sesi perencanaan sebelumnya mencatat migration/sqlc/GORM/config
+sebagai "selesai" tapi file-nya tidak pernah benar-benar ada di repo (dan repo
+belum di-git-init, jadi tidak ada history untuk recover). Semua item itu
+dibangun ulang dari nol di sesi ini berdasarkan `docs/api-design.md` + ADR.
+Dua bug juga ditemukan & diperbaiki di jalan:
+- `backend.Dockerfile`/`worker.Dockerfile` copy `go.work` tapi cuma satu dari
+  dua modul workspace lain → build gagal. Fix: `ENV GOWORK=off`, tiap app
+  resolve `sonora.dev/go-core` lewat `replace` di `go.mod` masing-masing.
+- Healthcheck `meilisearch` pakai `http://localhost:7700/health` — di dalam
+  container itu resolve ke `::1` dan gagal connect. Fix: ganti ke `127.0.0.1`.
 
-Setelah itu, Sprint 1 100% selesai — lanjut Sprint 2 (Auth) sesuai `docs/roadmap.md`.
+Lanjut ke Sprint 2 (Auth) sesuai `docs/roadmap.md` — breakdown detail belum
+dibuat, buat dulu sebelum mulai coding (sesuai filosofi just-in-time di atas).
 
 ## Design System (sudah final, jangan improvisasi warna baru)
 
