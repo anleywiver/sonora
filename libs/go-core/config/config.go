@@ -39,6 +39,16 @@ type Config struct {
 	// IngestTmpDir holds uploaded files between accept (HTTP request) and
 	// process (worker task) — must be a volume shared by api and worker.
 	IngestTmpDir string
+
+	// Backup* configure the Sprint 13 scheduled DB backup (ADR 0007) — a
+	// Hetzner Storage Box over SFTP. All optional: an empty BackupSSHHost
+	// means the backup job logs a clear "not configured" message and skips
+	// instead of failing hard, same as the credential-gap pattern used for
+	// Drive/Bandcamp/Dropbox.
+	BackupSSHHost       string
+	BackupSSHUser       string
+	BackupSSHRemotePath string
+	BackupSSHKeyPath    string
 }
 
 // Load reads .env (if present — Docker Compose injects env vars directly and
@@ -60,6 +70,10 @@ func Load() (*Config, error) {
 		FrontendURL:                     envOrDefault("FRONTEND_URL", "http://localhost:3000"),
 		AdminURL:                        envOrDefault("ADMIN_URL", "http://localhost:3001"),
 		IngestTmpDir:                    envOrDefault("INGEST_TMP_DIR", "/data/ingest-tmp"),
+		BackupSSHHost:                   os.Getenv("BACKUP_SSH_HOST"),
+		BackupSSHUser:                   os.Getenv("BACKUP_SSH_USER"),
+		BackupSSHRemotePath:             envOrDefault("BACKUP_SSH_REMOTE_PATH", "/backups"),
+		BackupSSHKeyPath:                os.Getenv("BACKUP_SSH_KEY_PATH"),
 	}
 
 	required := map[string]string{

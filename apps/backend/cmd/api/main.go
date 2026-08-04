@@ -7,11 +7,13 @@ import (
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/hibiken/asynq"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	appanalytics "sonora.dev/go-core/application/analytics"
 	appauth "sonora.dev/go-core/application/auth"
@@ -108,6 +110,8 @@ func main() {
 	analyticsService := appanalytics.NewService(queries)
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
 
+	backupHandler := handlers.NewBackupHandler(asynqClient)
+
 	catalogService := appcatalog.NewService(queries, credentialsBox, cfg.JWTAccessSecret, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	catalogHandler := handlers.NewCatalogHandler(catalogService)
 
@@ -145,6 +149,7 @@ func main() {
 
 	app.Use(requestid.New())
 	app.Use(logger.New())
+	app.Use(middleware.Metrics)
 	// Sprint 12 (ADR 0006): origins come from config, not a hardcoded dev
 	// string, so a real VPS deploy with real domains just works via .env.
 	app.Use(cors.New(cors.Config{
@@ -166,6 +171,10 @@ func main() {
 			"service": "sonora-api",
 		})
 	})
+
+	// Sprint 13 (ADR 0007): no /api/v1 prefix, no auth — internal metrics
+	// endpoint for a Prometheus scraper, not a public API route.
+	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 
 	api := app.Group("/api/v1")
 
@@ -206,6 +215,7 @@ func main() {
 	adminGroup.Post("/ingest-sources/connections/:id/sync", ingestSourceHandler.Sync)
 	adminGroup.Get("/analytics/top-played", analyticsHandler.TopPlayed)
 	adminGroup.Get("/analytics/storage-growth", analyticsHandler.StorageGrowth)
+	adminGroup.Post("/backup/run", backupHandler.Run)
 
 	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
 	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)

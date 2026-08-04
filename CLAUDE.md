@@ -48,11 +48,65 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 12 selesai — lanjut Sprint 13 (Observability & DR)
+## Status saat ini: Sprint 13 selesai — lanjut Sprint 14 (UI Fidelity & Production Readiness, INI BUKAN SPRINT TERAKHIR PERENCANAAN — baca `docs/roadmap.md`, project baru "selesai" setelah Sprint 14)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 13 (selesai)
+
+Sprint 13 (Observability & DR) selesai 100% (2026-08-05). Keputusan baru
+(desain `/metrics`, mekanisme backup, kenapa `hey` bukan k6) di
+`docs/decisions/0007-sprint13-observability-and-dr.md`. **Restore drill
+BENERAN dicoba** (bukan cuma ditulis di dokumen) — sesuai kata roadmap
+"wajib dicoba beneran" — pakai SFTP server lokal (`atmoz/sftp`) sebagai
+pengganti Hetzner Storage Box asli yang belum ada kredensialnya.
+
+- [x] `GET /metrics` (tanpa `/api/v1` prefix, tanpa auth — endpoint
+      internal Prometheus scraper) — `prometheus/client_golang` +
+      `middleware.Metrics` (request count + latency histogram per
+      method/route/status), sengaja minim (tidak ada metric bisnis
+      kustom kayak queue depth, skala personal tidak butuh itu)
+- [x] `application/backup` — `pg_dump "$DATABASE_URL" | gzip` lalu
+      upload lewat `scp` (CLI, `postgresql-client` + `openssh-client`
+      ditambah ke `worker.Dockerfile`) ke Hetzner Storage Box. Dijadwalkan
+      harian 02:00 lewat `asynq.Scheduler` yang sudah ada sejak Sprint 10
+      (`maintenance:backup_database`), plus `POST /admin/backup/run`
+      buat trigger manual (pola sama dengan "Run health check"/"Sync now")
+- [x] Config baru (opsional, bukan required): `BACKUP_SSH_HOST/USER/
+      REMOTE_PATH/KEY_PATH` — kalau `BACKUP_SSH_HOST` kosong, job backup
+      log jelas "not set, skipping" dan tidak retry sia-sia (pola
+      credential-gap yang sama dengan Drive/Bandcamp/Dropbox)
+- [x] Rate limit dari Sprint 12 (300 req/menit per IP, global) ketemu
+      "beneran mengganggu" load test pertama (lihat catatan verifikasi)
+      — bukan bug, tapi insight nyata: budget itu dibagi rata ke SEMUA
+      endpoint per IP yang sama, bukan per-route
+
+Diverifikasi jauh melebihi sekadar "kode ada":
+- **Restore drill sungguhan**: trigger `POST /admin/backup/run` asli →
+  file `.sql.gz` BENERAN mendarat di server SFTP lokal (dicek langsung
+  di container SFTP-nya) → didownload lagi → di-restore (`psql -f`) ke
+  Postgres KOSONG yang baru → dibandingkan: 21 tabel di kedua DB SAMA,
+  isi tabel `users` (id/email/role) SAMA PERSIS. Ini membuktikan seluruh
+  rantai pg_dump→scp→download→restore utuh, bukan asumsi "seharusnya
+  jalan"
+- `/metrics`: dicek langsung ada `sonora_http_requests_total` dan
+  `sonora_http_request_duration_seconds` dengan angka yang benar
+  ke-update setelah request nyata ke `/health`
+- Backup tanpa config: `BACKUP_SSH_HOST` kosong → job gagal rapi
+  ("not set, skipping"), tidak crash, dikonfirmasi di log
+- Load test (`hey`, container terpisah): 500 request ke `/health` dalam
+  beberapa detik → limiter global memotong di ~300 (429 setelahnya) —
+  BENERAN membuktikan rate limit Sprint 12 jalan di bawah beban nyata,
+  bukan cuma di tes curl satu-satu. Diulang di bawah budget (200 request
+  ke `/api/v1/auth/me`, endpoint asli lewat JWT+GORM): 200/200 sukses,
+  p99 latency ~29ms — performa sehat untuk skala personal
+
+**Butuh input manual dari user**: SSH host/user/path/key Hetzner Storage
+Box asli belum ada — job backup terjadwal (harian 02:00) akan skip
+dengan pesan jelas sampai `.env` diisi. Mekanisme dan restore drill sudah
+terbukti benar lewat stand-in lokal di atas.
 
 ### Sprint 12 (selesai)
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	appbackup "sonora.dev/go-core/application/backup"
 	appingest "sonora.dev/go-core/application/ingest"
 	appingestsource "sonora.dev/go-core/application/ingestsource"
 	appmaintenance "sonora.dev/go-core/application/maintenance"
@@ -57,6 +58,13 @@ func main() {
 	storageAccountService := appstorage.NewService(queries, credentialsBox, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	ingestSourceService := appingestsource.NewService(queries, credentialsBox, userRepo, ingestService, cfg.IngestTmpDir)
 	maintenanceService := appmaintenance.NewService(queries, refreshTokenRepo, storageAccountService)
+	backupService := appbackup.NewService(appbackup.Config{
+		DatabaseURL: cfg.DatabaseURL,
+		SSHHost:     cfg.BackupSSHHost,
+		SSHUser:     cfg.BackupSSHUser,
+		RemotePath:  cfg.BackupSSHRemotePath,
+		SSHKeyPath:  cfg.BackupSSHKeyPath,
+	}, "/tmp/sonora-backup")
 
 	redisOpt := asynq.RedisClientOpt{Addr: cfg.RedisURL}
 
@@ -97,6 +105,15 @@ func main() {
 		ingestSourceService.SyncAll(ctx)
 		return nil
 	})
+	// Sprint 13: not configured until real Hetzner Storage Box credentials
+	// exist (ADR 0007) — logs and returns nil rather than retrying forever
+	// on a config problem asynq can't fix by retrying.
+	mux.HandleFunc(appbackup.TaskTypeRunBackup, func(ctx context.Context, t *asynq.Task) error {
+		if err := backupService.RunBackup(ctx); err != nil {
+			log.Printf("backup: %v", err)
+		}
+		return nil
+	})
 
 	// Sprint 10: Asynq Scheduler runs as a goroutine in this same process
 	// rather than a separate deployable — no reason for a third process on
@@ -110,6 +127,9 @@ func main() {
 	}
 	if _, err := scheduler.Register("0 */6 * * *", asynq.NewTask(appingestsource.TaskTypeSyncAll, nil)); err != nil {
 		log.Fatalf("schedule ingest source sync: %v", err)
+	}
+	if _, err := scheduler.Register("0 2 * * *", asynq.NewTask(appbackup.TaskTypeRunBackup, nil)); err != nil {
+		log.Fatalf("schedule database backup: %v", err)
 	}
 	go func() {
 		if err := scheduler.Run(); err != nil {

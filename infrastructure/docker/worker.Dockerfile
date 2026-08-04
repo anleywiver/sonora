@@ -14,7 +14,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/worker ./cmd/worker
 
 FROM alpine:3.20
 # ffmpeg provides ffprobe, used by the ingest pipeline (Sprint 3) to read
-# duration and tags from uploaded audio files.
-RUN apk add --no-cache ca-certificates ffmpeg
+# duration and tags from uploaded audio files. postgresql-client provides
+# pg_dump and openssh-client provides scp, both for the Sprint 13
+# scheduled backup (ADR 0007).
+RUN apk add --no-cache ca-certificates ffmpeg postgresql-client openssh-client
 COPY --from=builder /out/worker /usr/local/bin/worker
 ENTRYPOINT ["/usr/local/bin/worker"]
