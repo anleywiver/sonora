@@ -3,6 +3,20 @@
 Vertical-slice approach: fondasi dulu (1 alur utuh login→upload→dengar),
 baru lebar fitur. Jangan loncat sprint.
 
+## PENTING: Sprint 13 BUKAN akhir project
+
+Setelah Sprint 13, sistem functionally jalan tapi UI belum tentu 100%
+cocok dengan mockup desain, dan belum production-ready secara deployment.
+Lanjut ke **Sprint 14** di bawah sebelum menyatakan project "selesai".
+
+## Fase 6 — UI Fidelity & Production Readiness
+- **Sprint 14**: Cocokkan SEMUA 21 halaman persis dengan `docs/screens-spec.md`
+  dan `docs/design-system.md` (jangan improvisasi styling). Rename section
+  admin "Crawler" jadi "Ingest Sources" (koreksi konsep lama). Setup deployment
+  produksi: Nginx + SSL (Let's Encrypt), domain, environment production
+  terpisah dari dev. Review checklist final terhadap semua Functional
+  Requirement di STEP 1 (lihat ADR) — pastikan tidak ada yang kelewat.
+
 ## Fase 0 — Foundation
 **Sprint 1**: Monorepo, Docker Compose, migration, CI skeleton.
 DoD: `docker compose up` semua service healthy, `/health` 200. **← STATUS SAAT INI**
