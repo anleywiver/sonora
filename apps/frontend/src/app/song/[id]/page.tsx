@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, Heart } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -19,10 +19,15 @@ interface SongDetail {
   album_cover_url: string;
 }
 
+interface Favorite {
+  target_id: string;
+}
+
 export default function SongDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [song, setSong] = useState<SongDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   const currentSong = usePlayerStore((s) => s.currentSong);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -35,7 +40,32 @@ export default function SongDetailPage() {
     apiFetch<SongDetail>(`/songs/${id}`)
       .then(setSong)
       .catch(() => setError("Lagu tidak ditemukan."));
+    apiFetch<Favorite[]>("/favorites?type=song")
+      .then((favs) => setIsFavorite(favs.some((f) => f.target_id === id)))
+      .catch(() => {});
   }, [id]);
+
+  const toggleFavorite = async () => {
+    const next = !isFavorite;
+    setIsFavorite(next); // optimistic
+    try {
+      if (next) {
+        await apiFetch("/favorites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "song", id }),
+        });
+      } else {
+        await apiFetch("/favorites", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "song", id }),
+        });
+      }
+    } catch {
+      setIsFavorite(!next); // revert on failure
+    }
+  };
 
   if (error) {
     return (
@@ -84,7 +114,14 @@ export default function SongDetailPage() {
         <p className="mt-1 text-xs text-text-secondary">{formatDuration(song.duration_ms)}</p>
       </div>
 
-      <div className="mt-8 flex justify-center">
+      <div className="mt-8 flex items-center justify-center gap-6">
+        <button
+          onClick={toggleFavorite}
+          aria-label={isFavorite ? "Unfavorite" : "Favorite"}
+          className={isFavorite ? "text-error" : "text-text-secondary"}
+        >
+          <Heart size={22} fill={isFavorite ? "currentColor" : "none"} />
+        </button>
         <button
           onClick={handlePlay}
           disabled={isLoading}
@@ -93,6 +130,7 @@ export default function SongDetailPage() {
         >
           {isCurrent && isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
         </button>
+        <div className="w-[22px]" aria-hidden />
       </div>
 
       {isCurrent && playerError && (

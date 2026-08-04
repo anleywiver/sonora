@@ -14,6 +14,7 @@ import (
 	appauth "sonora.dev/go-core/application/auth"
 	appcatalog "sonora.dev/go-core/application/catalog"
 	appingest "sonora.dev/go-core/application/ingest"
+	applibrary "sonora.dev/go-core/application/library"
 	appsearch "sonora.dev/go-core/application/search"
 	appstorage "sonora.dev/go-core/application/storageaccount"
 	"sonora.dev/go-core/config"
@@ -96,6 +97,12 @@ func main() {
 	searchService := appsearch.NewService(meiliClient)
 	searchHandler := handlers.NewSearchHandler(searchService, catalogService)
 
+	playlistRepo := repository.NewPlaylistRepository(gormDB)
+	favoriteRepo := repository.NewFavoriteRepository(gormDB)
+	libraryService := applibrary.NewService(playlistRepo, favoriteRepo, catalogService)
+	playlistHandler := handlers.NewPlaylistHandler(libraryService)
+	favoriteHandler := handlers.NewFavoriteHandler(libraryService)
+
 	requireAuth := middleware.RequireAuth(jwtIssuer)
 	requireOwner := middleware.RequireRole(string(identity.RoleOwner))
 
@@ -158,6 +165,21 @@ func main() {
 	searchGroup.Get("", searchHandler.Search)
 	searchGroup.Get("/autocomplete", searchHandler.Autocomplete)
 	searchGroup.Get("/trending", searchHandler.Trending)
+
+	playlistGroup := api.Group("/playlists", requireAuth)
+	playlistGroup.Post("", playlistHandler.Create)
+	playlistGroup.Get("", playlistHandler.List)
+	playlistGroup.Get("/:id", playlistHandler.Get)
+	playlistGroup.Patch("/:id", playlistHandler.Update)
+	playlistGroup.Delete("/:id", playlistHandler.Delete)
+	playlistGroup.Post("/:id/songs", playlistHandler.AddSong)
+	playlistGroup.Patch("/:id/songs/:song_row_id", playlistHandler.UpdateSongPosition)
+	playlistGroup.Delete("/:id/songs/:song_row_id", playlistHandler.RemoveSong)
+
+	favoriteGroup := api.Group("/favorites", requireAuth)
+	favoriteGroup.Get("", favoriteHandler.List)
+	favoriteGroup.Post("", favoriteHandler.Create)
+	favoriteGroup.Delete("", favoriteHandler.Delete)
 
 	log.Fatal(app.Listen(":8080"))
 }

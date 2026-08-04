@@ -48,11 +48,56 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 4 selesai — lanjut Sprint 5 (Library)
+## Status saat ini: Sprint 5 selesai — lanjut Sprint 6 (History & Lyrics)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 5 (selesai)
+
+Sprint 5 (Library) selesai 100% (2026-08-04). Diverifikasi lewat curl
+end-to-end (semua endpoint playlist/favorite) DAN lewat Playwright browser
+nyata (buat playlist → tambah lagu via search → play dari playlist →
+favorite lagu dari song detail → cek halaman Favorite → unfavorite).
+
+- [x] `domain/library` + GORM repository (`playlist_repository.go`,
+      `favorite_repository.go`) — pola sama persis dengan `domain/identity`
+      Sprint 2, konsisten dengan keputusan hybrid ADR (GORM untuk CRUD
+      sederhana)
+- [x] `application/library` — nama package sengaja sama dengan domain
+      package yang dibungkusnya (`domainlibrary` alias di file yang butuh
+      keduanya) karena ini memang fitur "Library" Sprint 5
+- [x] Playlist CRUD + reorder fractional (`position` dikirim final oleh
+      client, server tidak menghitung ulang — konsisten dengan skema
+      `playlist_songs.position DOUBLE PRECISION` dari migration Sprint 1)
+- [x] Favorites CRUD (song/album/artist/playlist), cek duplikat →
+      409 conflict, `GET /favorites?type=` untuk filter
+- [x] Endpoint `docs/api-design.md`: `/playlists*`, `/playlists/:id/songs*`,
+      `/favorites` (GET/POST/DELETE, body `{type, id}` sesuai spek — bukan
+      path param, termasuk untuk DELETE)
+- [x] Frontend: `/library` (list + create playlist), `/library/[id]`
+      (lihat lagu, cari+tambah lagu via `/search`, hapus lagu, play),
+      `/favorite` (list favorite dengan detail ter-resolve per tipe,
+      unfavorite) — favorite type artist/album resolve tapi tidak
+      di-link (belum ada halaman detail artist/album, lihat catatan di bawah)
+- [x] Tombol favorite (heart) ditambahkan di `/song/[id]` — sebelumnya
+      Sprint 4 belum ada cara favorite dari UI sama sekali
+
+Catatan scope: Home (`/`) SENGAJA belum diisi widget asli (Continue
+Listening, Recently Played, Quick Mix) — itu butuh `play_history` yang
+baru ada di Sprint 6. Halaman Artist Detail dan Album Detail (screens-spec
+#12, #13) juga belum dibangun — belum ada sprint yang eksplisit
+menugaskannya; kemungkinan perlu ditambahkan sebagai bagian dari Sprint 14
+(UI Fidelity) atau sisipan kecil sebelum itu kalau dibutuhkan lebih awal.
+
+Satu hal menarik ketemu saat testing browser (bukan bug, tapi dicatat):
+Next.js dev-mode error indicator ("N Issues", muncul dari `console.error`
+kita sendiri di `player.ts` saat playback gagal — expected karena belum
+ada Drive asli) bisa menutupi ikon Home/Search di bottom nav pada
+viewport sempit. Ini murni overlay dev-only (tidak ada di production
+build), tapi dicatat karena hampir bikin salah diagnosis "nav tidak bisa
+diklik" sebagai bug aplikasi padahal bukan.
 
 ### Sprint 4 (selesai)
 
