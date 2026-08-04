@@ -23,5 +23,8 @@ RETURNING *;
 -- name: RemoveQueueItem :exec
 DELETE FROM queue_items WHERE id = $1 AND user_id = $2;
 
+-- name: UpdateQueueItemPosition :execrows
+UPDATE queue_items SET position = $3 WHERE id = $1 AND user_id = $2;
+
 -- name: ClearQueue :exec
 DELETE FROM queue_items WHERE user_id = $1;

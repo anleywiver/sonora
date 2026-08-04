@@ -16,7 +16,10 @@ type Querier interface {
 	CompleteIngestJob(ctx context.Context, arg CompleteIngestJobParams) error
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
+	CreateHistoryEntry(ctx context.Context, arg CreateHistoryEntryParams) (PlayHistory, error)
 	CreateIngestJob(ctx context.Context, arg CreateIngestJobParams) (IngestJob, error)
+	CreateLyrics(ctx context.Context, arg CreateLyricsParams) (Lyric, error)
+	CreateLyricsProvider(ctx context.Context, arg CreateLyricsProviderParams) (LyricsProvider, error)
 	CreateSong(ctx context.Context, arg CreateSongParams) (Song, error)
 	CreateStorageAccount(ctx context.Context, arg CreateStorageAccountParams) (StorageAccount, error)
 	CreateStorageFile(ctx context.Context, arg CreateStorageFileParams) (StorageFile, error)
@@ -32,6 +35,8 @@ type Querier interface {
 	GetArtistByID(ctx context.Context, id pgtype.UUID) (Artist, error)
 	GetArtistByName(ctx context.Context, name string) (Artist, error)
 	GetIngestJobByID(ctx context.Context, id pgtype.UUID) (IngestJob, error)
+	GetLyricsBySongID(ctx context.Context, songID pgtype.UUID) (Lyric, error)
+	GetLyricsProviderByName(ctx context.Context, name string) (LyricsProvider, error)
 	GetPlaybackState(ctx context.Context, userID pgtype.UUID) (PlaybackState, error)
 	// Used by the ingest pipeline for dedup before touching storage.
 	GetSongByChecksum(ctx context.Context, checksum string) (Song, error)
@@ -44,7 +49,11 @@ type Querier interface {
 	GetStorageFileByChecksum(ctx context.Context, checksum string) (StorageFile, error)
 	IncrementStorageAccountUsedBytes(ctx context.Context, arg IncrementStorageAccountUsedBytesParams) error
 	ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) ([]Album, error)
+	// Most recent play per song, excluding songs barely started or basically
+	// finished (both would be noise in a "continue listening" widget).
+	ListContinueListening(ctx context.Context, arg ListContinueListeningParams) ([]ListContinueListeningRow, error)
 	ListGenres(ctx context.Context) ([]Genre, error)
+	ListHistoryByUser(ctx context.Context, arg ListHistoryByUserParams) ([]PlayHistory, error)
 	ListIngestJobsByUser(ctx context.Context, arg ListIngestJobsByUserParams) ([]IngestJob, error)
 	ListQueueByUser(ctx context.Context, userID pgtype.UUID) ([]QueueItem, error)
 	// Stand-in for "trending" until play_history exists (Sprint 6) to compute
@@ -56,6 +65,7 @@ type Querier interface {
 	MarkIngestJobProcessing(ctx context.Context, id pgtype.UUID) error
 	RemoveQueueItem(ctx context.Context, arg RemoveQueueItemParams) error
 	ResetIngestJobToPending(ctx context.Context, id pgtype.UUID) error
+	UpdateQueueItemPosition(ctx context.Context, arg UpdateQueueItemPositionParams) (int64, error)
 	UpsertPlaybackState(ctx context.Context, arg UpsertPlaybackStateParams) (PlaybackState, error)
 }
 

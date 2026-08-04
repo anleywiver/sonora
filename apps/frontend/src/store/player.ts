@@ -40,6 +40,15 @@ function getAudio(): HTMLAudioElement {
   return w.__sonoraAudio;
 }
 
+// Fire-and-forget: a failed history write shouldn't interrupt playback.
+function recordHistory(songId: string, progressMs: number) {
+  apiFetch("/history", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ song_id: songId, progress_ms: Math.round(progressMs) }),
+  }).catch(() => {});
+}
+
 export const usePlayerStore = create<PlayerState>((set) => ({
   currentSong: null,
   isPlaying: false,
@@ -60,7 +69,14 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       audio.ontimeupdate = () => set({ positionMs: audio.currentTime * 1000 });
       audio.onloadedmetadata = () => set({ durationMs: audio.duration * 1000 });
       audio.onplay = () => set({ isPlaying: true });
-      audio.onpause = () => set({ isPlaying: false });
+      // Recorded on pause/end rather than continuously — a discrete event
+      // per listening session is enough for Continue Listening to work,
+      // without spamming POST /history on every timeupdate tick.
+      audio.onpause = () => {
+        set({ isPlaying: false });
+        recordHistory(song.id, audio.currentTime * 1000);
+      };
+      audio.onended = () => recordHistory(song.id, audio.currentTime * 1000);
       audio.onerror = () =>
         set({ error: "Gagal memutar lagu ini.", isPlaying: false, isLoading: false });
 

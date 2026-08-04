@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronDown, Pause, Play } from "lucide-react";
+import { ChevronDown, ListMusic, Mic2, Pause, Play } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { formatDuration } from "@/lib/utils";
@@ -70,6 +71,17 @@ export default function NowPlayingPage() {
         >
           {isPlaying ? <Pause size={26} /> : <Play size={26} className="ml-1" />}
         </button>
+      </div>
+
+      <div className="mt-8 flex items-center justify-center gap-10 text-text-secondary">
+        <Link href="/lyrics" aria-label="Lyrics" className="flex flex-col items-center gap-1 text-xs">
+          <Mic2 size={20} />
+          Lyrics
+        </Link>
+        <Link href="/queue" aria-label="Queue" className="flex flex-col items-center gap-1 text-xs">
+          <ListMusic size={20} />
+          Queue
+        </Link>
       </div>
     </main>
   );

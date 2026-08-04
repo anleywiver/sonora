@@ -7,7 +7,9 @@ package meilisearch
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	meili "github.com/meilisearch/meilisearch-go"
 )
@@ -50,6 +52,12 @@ type SearchResult struct {
 func (c *Client) SearchSongs(ctx context.Context, query string, limit int64) (*SearchResult, error) {
 	resp, err := c.svc.Index(SongsIndex).SearchWithContext(ctx, query, &meili.SearchRequest{Limit: limit})
 	if err != nil {
+		// A fresh install (or right after any full reindex) has no songs
+		// index at all yet — that's "no results", not a search failure.
+		var meiliErr *meili.Error
+		if errors.As(err, &meiliErr) && meiliErr.StatusCode == http.StatusNotFound {
+			return &SearchResult{}, nil
+		}
 		return nil, fmt.Errorf("meilisearch: search: %w", err)
 	}
 	var docs []SongDocument

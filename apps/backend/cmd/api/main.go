@@ -13,8 +13,11 @@ import (
 
 	appauth "sonora.dev/go-core/application/auth"
 	appcatalog "sonora.dev/go-core/application/catalog"
+	apphistory "sonora.dev/go-core/application/history"
 	appingest "sonora.dev/go-core/application/ingest"
 	applibrary "sonora.dev/go-core/application/library"
+	applyrics "sonora.dev/go-core/application/lyrics"
+	appqueue "sonora.dev/go-core/application/queue"
 	appsearch "sonora.dev/go-core/application/search"
 	appstorage "sonora.dev/go-core/application/storageaccount"
 	"sonora.dev/go-core/config"
@@ -22,6 +25,7 @@ import (
 	"sonora.dev/go-core/infrastructure/crypto"
 	"sonora.dev/go-core/infrastructure/idempotency"
 	"sonora.dev/go-core/infrastructure/jwt"
+	infralyrics "sonora.dev/go-core/infrastructure/lyrics"
 	"sonora.dev/go-core/infrastructure/meilisearch"
 	"sonora.dev/go-core/infrastructure/oauth"
 	"sonora.dev/go-core/infrastructure/postgres"
@@ -103,6 +107,16 @@ func main() {
 	playlistHandler := handlers.NewPlaylistHandler(libraryService)
 	favoriteHandler := handlers.NewFavoriteHandler(libraryService)
 
+	historyService := apphistory.NewService(queries)
+	historyHandler := handlers.NewHistoryHandler(historyService, catalogService)
+
+	queueService := appqueue.NewService(queries, catalogService)
+	queueHandler := handlers.NewQueueHandler(queueService)
+
+	lrclibClient := infralyrics.NewLRCLIBClient()
+	lyricsService := applyrics.NewService(queries, catalogService, lrclibClient)
+	lyricsHandler := handlers.NewLyricsHandler(lyricsService)
+
 	requireAuth := middleware.RequireAuth(jwtIssuer)
 	requireOwner := middleware.RequireRole(string(identity.RoleOwner))
 
@@ -180,6 +194,20 @@ func main() {
 	favoriteGroup.Get("", favoriteHandler.List)
 	favoriteGroup.Post("", favoriteHandler.Create)
 	favoriteGroup.Delete("", favoriteHandler.Delete)
+
+	api.Get("/songs/:id/lyrics", requireAuth, lyricsHandler.Get)
+
+	historyGroup := api.Group("/history", requireAuth)
+	historyGroup.Get("", historyHandler.List)
+	historyGroup.Post("", historyHandler.Create)
+	api.Get("/library/continue-listening", requireAuth, historyHandler.ContinueListening)
+
+	queueGroup := api.Group("/queue", requireAuth)
+	queueGroup.Get("", queueHandler.List)
+	queueGroup.Post("", queueHandler.Add)
+	queueGroup.Patch("/:id", queueHandler.UpdatePosition)
+	queueGroup.Delete("/:id", queueHandler.Remove)
+	queueGroup.Delete("", queueHandler.Clear)
 
 	log.Fatal(app.Listen(":8080"))
 }

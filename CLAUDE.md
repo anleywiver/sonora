@@ -48,11 +48,57 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 5 selesai — lanjut Sprint 6 (History & Lyrics)
+## Status saat ini: Sprint 6 selesai — lanjut Sprint 7 (WebSocket infra)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 6 (selesai)
+
+Sprint 6 (History & Lyrics) selesai 100% (2026-08-05). LRCLIB diuji dengan
+lagu ASLI ("Yesterday" — The Beatles) lewat panggilan API sungguhan (bukan
+mock) — lirik synced dengan timestamp beneran didapat dan di-cache.
+
+- [x] `application/history` — record play, list (cursor pagination pola
+      sama dengan ingest), `ListContinueListening` (query `DISTINCT ON`
+      + filter `progress > 5s AND progress < 95% duration`, exclude lagu
+      yang baru mulai atau nyaris selesai)
+- [x] `application/queue` — CRUD queue_items (position fractional, pola
+      sama dengan playlist)
+- [x] `application/lyrics` + `infrastructure/lyrics` (klien LRCLIB) —
+      cache-first (`lyrics` table), lazy find-or-create `lyrics_providers`
+      row untuk "lrclib" saat cache-miss pertama
+- [x] Endpoint `docs/api-design.md`: `/history` (GET/POST),
+      `/library/continue-listening`, `/queue*`, `/songs/:id/lyrics`
+- [x] Frontend: `/lyrics` (fullscreen, parse LRC → highlight baris aktif +
+      fade progresif + tap-to-seek, sesuai `docs/design-system.md`),
+      `/queue` (now playing + next-up + remove + clear), tombol
+      Lyrics/Queue di Now Playing, tombol "add to queue" di song detail,
+      widget Continue Listening + Trending nyata di Home (`/`)
+- [x] Player (`store/player.ts`) merekam history saat pause/ended lagu
+
+**Bug nyata ketemu & diperbaiki lewat testing** (bukan lewat review kode):
+`SearchSongs` melempar error 500 kalau index Meilisearch `songs` belum
+pernah dibuat sama sekali (fresh install, atau kapan pun index kosong
+total) — Meilisearch balas 404 `index_not_found` untuk search di index
+yang belum ada, dan kode kita meneruskannya sebagai error alih-alih
+"0 hasil". Ini akan bikin search rusak total di instalasi baru sampai
+lagu pertama selesai di-ingest. Fix: `infrastructure/meilisearch` sekarang
+cek `*meilisearch.Error` dengan `StatusCode == 404` dan balas hasil kosong.
+Ketemu murni karena testing end-to-end pakai state yang benar-benar
+kosong (index sengaja dihapus antar sprint saat cleanup) — highlight
+kenapa "bersihkan data test tiap habis sprint" ternyata berguna ganda:
+selain kebersihan, juga tidak sengaja jadi test kondisi fresh-install.
+
+Catatan scope: `/player/*` (play/pause/seek/next/previous/transfer) dan
+`/player/state` di `docs/api-design.md` SENGAJA belum diimplementasikan —
+itu Sprint 7/8 (Active Device + WebSocket), bukan Sprint 6. Merekam
+history dari real playback juga belum bisa diverifikasi lewat browser
+(audio tidak pernah benar-benar main tanpa Drive asli, jadi event
+pause/ended asli tidak pernah terpicu di lingkungan tes) — kode sudah
+benar secara logika, tapi correctness end-to-end menunggu credential Drive
+asli sama seperti Sprint 3/4.
 
 ### Sprint 5 (selesai)
 

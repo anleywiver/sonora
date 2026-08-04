@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Pause, Heart } from "lucide-react";
+import { Play, Pause, Heart, ListPlus } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -44,6 +44,22 @@ export default function SongDetailPage() {
       .then((favs) => setIsFavorite(favs.some((f) => f.target_id === id)))
       .catch(() => {});
   }, [id]);
+
+  const [queued, setQueued] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const handleAddToQueue = async () => {
+    try {
+      await apiFetch("/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ song_id: id }),
+      });
+      setQueued(true);
+      setTimeout(() => setQueued(false), 2000);
+    } catch {
+      setQueueError("Gagal menambah ke queue.");
+    }
+  };
 
   const toggleFavorite = async () => {
     const next = !isFavorite;
@@ -130,12 +146,20 @@ export default function SongDetailPage() {
         >
           {isCurrent && isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
         </button>
-        <div className="w-[22px]" aria-hidden />
+        <button
+          onClick={handleAddToQueue}
+          aria-label="Add to queue"
+          className={queued ? "text-success" : "text-text-secondary"}
+        >
+          <ListPlus size={22} />
+        </button>
       </div>
 
       {isCurrent && playerError && (
         <p className="mt-4 text-center text-sm text-error">{playerError}</p>
       )}
+      {queueError && <p className="mt-4 text-center text-sm text-error">{queueError}</p>}
+      {queued && <p className="mt-4 text-center text-sm text-success">Ditambahkan ke queue.</p>}
     </main>
   );
 }

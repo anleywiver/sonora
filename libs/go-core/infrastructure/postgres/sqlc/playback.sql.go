@@ -113,6 +113,24 @@ func (q *Queries) RemoveQueueItem(ctx context.Context, arg RemoveQueueItemParams
 	return err
 }
 
+const updateQueueItemPosition = `-- name: UpdateQueueItemPosition :execrows
+UPDATE queue_items SET position = $3 WHERE id = $1 AND user_id = $2
+`
+
+type UpdateQueueItemPositionParams struct {
+	ID       pgtype.UUID `json:"id"`
+	UserID   pgtype.UUID `json:"user_id"`
+	Position float64     `json:"position"`
+}
+
+func (q *Queries) UpdateQueueItemPosition(ctx context.Context, arg UpdateQueueItemPositionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateQueueItemPosition, arg.ID, arg.UserID, arg.Position)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const upsertPlaybackState = `-- name: UpsertPlaybackState :one
 INSERT INTO playback_states (user_id, active_device_id, current_song_id, position_ms, is_playing, updated_at)
 VALUES ($1, $2, $3, $4, $5, now())
