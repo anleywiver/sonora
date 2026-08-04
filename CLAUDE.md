@@ -48,7 +48,13 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 1 selesai — lanjut Sprint 2 (Auth)
+## Status saat ini: Sprint 2 selesai — lanjut Sprint 3 (Ingest dasar)
+
+Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
+
+## Riwayat Sprint
+
+### Sprint 1 (selesai)
 
 Sprint 1 selesai 100% (2026-08-04):
 - [x] Monorepo scaffold (Turborepo + `go.work`), repo di-`git init` (sebelumnya belum ada `.git` sama sekali)
@@ -74,8 +80,41 @@ Dua bug juga ditemukan & diperbaiki di jalan:
 - Healthcheck `meilisearch` pakai `http://localhost:7700/health` — di dalam
   container itu resolve ke `::1` dan gagal connect. Fix: ganti ke `127.0.0.1`.
 
-Lanjut ke Sprint 2 (Auth) sesuai `docs/roadmap.md` — breakdown detail belum
-dibuat, buat dulu sebelum mulai coding (sesuai filosofi just-in-time di atas).
+### Sprint 2 (selesai)
+
+Sprint 2 (Auth) selesai 100% (2026-08-04), diverifikasi lewat Docker Compose
+end-to-end (build clean, `/health` 200, `/auth/me` & `/devices` return 401
+tanpa token, `/auth/google` redirect 302, semua tabel identity ada di DB):
+- [x] Domain layer (`libs/go-core/domain/identity`) — `User`, `Device`,
+      `RefreshToken` + repository interface, role Owner/Member
+- [x] `application/auth` service — Google OAuth exchange, find-or-create
+      user (user pertama otomatis Owner), issue token pair, refresh
+      rotation (revoke lama + issue baru terikat device yang sama), logout,
+      logout-all, list/remove device
+- [x] JWT issuer (`infrastructure/jwt`) — access token 15 menit, HS256
+- [x] Google OAuth client (`infrastructure/oauth`) — auth URL + code
+      exchange + userinfo fetch
+- [x] Repository GORM (`postgres/repository`) — user, device, refresh_token
+- [x] HTTP layer (`apps/backend/internal/http`) — `auth_handler.go`
+      (google/callback/refresh/logout/logout-all/me), `device_handler.go`
+      (list/delete), `middleware/auth.go` (RequireAuth + RequireRole),
+      response envelope `{data}`/`{error}`
+- [x] Refresh token dikirim sebagai httpOnly cookie (bukan JSON body),
+      access token lewat URL fragment setelah OAuth callback — access
+      token tidak pernah tersimpan di server/log
+- [x] Semua endpoint `/auth/*` dan `/devices*` di `docs/api-design.md`
+      ter-wire dan cocok kontraknya
+
+Catatan: kode Sprint 2 sudah ada di repo dari sesi sebelum "checkpoint
+sebelum autonomous run" — sesi ini memverifikasi ulang (build + docker +
+smoke test DB), bukan menulis dari nol.
+
+**Butuh input manual dari user**: `GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET`
+di `.env` masih kosong (perlu dibuat di Google Cloud Console). Kode OAuth
+sudah lengkap dan ter-wire, tapi login Google beneran belum bisa dites
+end-to-end sampai credential ini diisi.
+
+Lanjut ke Sprint 3 (Ingest dasar) sesuai `docs/roadmap.md`.
 
 ## Design System (sudah final, jangan improvisasi warna baru)
 
