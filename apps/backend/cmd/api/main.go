@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -17,6 +18,7 @@ import (
 	appingest "sonora.dev/go-core/application/ingest"
 	applibrary "sonora.dev/go-core/application/library"
 	applyrics "sonora.dev/go-core/application/lyrics"
+	appplayback "sonora.dev/go-core/application/playback"
 	appqueue "sonora.dev/go-core/application/queue"
 	appsearch "sonora.dev/go-core/application/search"
 	appstorage "sonora.dev/go-core/application/storageaccount"
@@ -32,9 +34,11 @@ import (
 	"sonora.dev/go-core/infrastructure/postgres/repository"
 	"sonora.dev/go-core/infrastructure/postgres/sqlc"
 	"sonora.dev/go-core/infrastructure/redis"
+	"sonora.dev/go-core/infrastructure/wstoken"
 
 	"sonora.dev/backend/internal/http/handlers"
 	"sonora.dev/backend/internal/http/middleware"
+	"sonora.dev/backend/internal/ws"
 )
 
 const (
@@ -116,6 +120,12 @@ func main() {
 	lrclibClient := infralyrics.NewLRCLIBClient()
 	lyricsService := applyrics.NewService(queries, catalogService, lrclibClient)
 	lyricsHandler := handlers.NewLyricsHandler(lyricsService)
+
+	wsHub := ws.NewHub()
+	wsTokens := wstoken.NewIssuer(redisClient)
+	playbackService := appplayback.NewService(queries)
+	wsHandler := handlers.NewWSHandler(wsTokens, wsHub, playbackService)
+	playerHandler := handlers.NewPlayerHandler(playbackService, wsHub)
 
 	requireAuth := middleware.RequireAuth(jwtIssuer)
 	requireOwner := middleware.RequireRole(string(identity.RoleOwner))
@@ -208,6 +218,17 @@ func main() {
 	queueGroup.Patch("/:id", queueHandler.UpdatePosition)
 	queueGroup.Delete("/:id", queueHandler.Remove)
 	queueGroup.Delete("", queueHandler.Clear)
+
+	api.Post("/ws/token", requireAuth, wsHandler.IssueToken)
+	// No requireAuth: the WS handshake can't send a custom Authorization
+	// header, so it's guarded by the single-use ws-token query param
+	// (consumed in UpgradeGate) instead — same reasoning as the stream
+	// endpoint (ADR 0001).
+	app.Get("/ws", wsHandler.UpgradeGate, websocket.New(wsHandler.Handle))
+
+	playerGroup := api.Group("/player", requireAuth)
+	playerGroup.Get("/state", playerHandler.GetState)
+	playerGroup.Post("/state", playerHandler.UpdateState)
 
 	log.Fatal(app.Listen(":8080"))
 }

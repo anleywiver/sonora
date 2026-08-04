@@ -48,11 +48,40 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 6 selesai — lanjut Sprint 7 (WebSocket infra)
+## Status saat ini: Sprint 7 selesai — lanjut Sprint 8 (Active Device + PWA)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 7 (selesai)
+
+Sprint 7 (WebSocket infra) selesai 100% (2026-08-05), backend-only sesuai
+roadmap (bullet Sprint 7 tidak menyebut frontend, beda dari Sprint 4-6 —
+konsumsi WS di UI baru ada gunanya nyata bareng Active Device Sprint 8).
+Diverifikasi pakai WS client Go asli (bukan mock): handshake, initial
+state push, broadcast real-time ke 1 DAN 2 koneksi sekaligus, single-use
+enforcement, dan penolakan token invalid — semua diuji nyata.
+
+- [x] `infrastructure/wstoken` — token 60 detik, single-use (Redis GETDEL
+      atomik, jadi race antara dua percobaan pakai token yang sama tidak
+      bisa dua-duanya berhasil)
+- [x] `application/playback` — get/upsert `playback_states`, TANPA
+      pengecekan otoritas Active Device (itu Sprint 8 — device mana pun
+      milik user bisa update state untuk sekarang)
+- [x] `apps/backend/internal/ws` — hub in-memory per proses (cukup untuk
+      1 VPS/1 proses api sesuai "Batasan Deployment"; kalau nanti scale ke
+      multi-instance butuh pub/sub bersama, di luar scope sekarang)
+- [x] `POST /ws/token`, `GET /ws?token=` (handshake), `GET/POST /player/state`
+      — `POST /player/state` sengaja bukan endpoint granular
+      play/pause/seek/next/previous/transfer dari `docs/api-design.md`;
+      itu lapisan Sprint 8 yang akan manggil upsert yang sama ini secara
+      internal, plus authority check "hanya Active Device yang boleh"
+
+Tes yang dijalankan: connect fresh → dapat push state terkini langsung;
+2 device connect bareng → keduanya dapat initial push DAN broadcast
+setelah `POST /player/state`; reuse token yang sama dua kali → gagal di
+percobaan kedua; token acak/invalid → 401.
 
 ### Sprint 6 (selesai)
 
