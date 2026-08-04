@@ -5,10 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
+import { useWSStore } from "@/store/ws";
 
 interface RefreshResponse {
   access_token: string;
   expires_in: number;
+  device_id: string;
 }
 
 const PUBLIC_PATHS = ["/login", "/auth/callback"];
@@ -25,7 +27,7 @@ const PUBLIC_PATHS = ["/login", "/auth/callback"];
 // — its rejection handler would then null out a token that was just set
 // correctly. Bootstrapping never applies to those two pages anyway.
 export function Providers({ children }: { children: React.ReactNode }) {
-  const setAccessToken = useAuthStore((s) => s.setAccessToken);
+  const setSession = useAuthStore((s) => s.setSession);
   const [ready, setReady] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -40,11 +42,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     apiFetch<RefreshResponse>("/auth/refresh", { method: "POST" })
       .then((res) => {
-        if (!cancelled) setAccessToken(res.access_token);
+        if (!cancelled) {
+          setSession(res.access_token, res.device_id);
+          void useWSStore.getState().connect();
+        }
       })
       .catch((e) => {
         if (cancelled) return;
-        setAccessToken(null);
+        setSession(null, null);
         if (e instanceof ApiError) {
           router.replace("/login");
         }

@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
 import { AppShell } from "./app-shell";
 import { Providers } from "./providers";
+import { RegisterServiceWorker } from "./register-sw";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -14,6 +15,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Sonora",
   description: "Personal music streaming platform",
+  manifest: "/manifest.json",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#050816",
 };
 
 export default function RootLayout({
@@ -22,6 +28,7 @@ export default function RootLayout({
   return (
     <html lang="id" className="dark">
       <body className={`${inter.variable} font-sans antialiased`}>
+        <RegisterServiceWorker />
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

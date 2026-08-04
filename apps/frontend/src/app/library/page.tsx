@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -57,6 +57,14 @@ export default function LibraryPage() {
           <Plus size={18} />
         </button>
       </div>
+
+      <Link
+        href="/downloads"
+        className="mt-4 flex items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5"
+      >
+        <Download size={18} className="text-text-secondary" />
+        <span className="text-sm font-medium">Downloads</span>
+      </Link>
 
       {creating && (
         <div className="mt-4 flex gap-2">

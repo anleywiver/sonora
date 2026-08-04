@@ -1,6 +1,8 @@
 import { create } from "zustand";
 
 import { apiFetch } from "@/lib/api";
+import { getDownload } from "@/lib/offline-db";
+import { syncRemoteState } from "@/store/ws";
 
 export interface PlayerSong {
   id: string;
@@ -49,7 +51,7 @@ function recordHistory(songId: string, progressMs: number) {
   }).catch(() => {});
 }
 
-export const usePlayerStore = create<PlayerState>((set) => ({
+export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentSong: null,
   isPlaying: false,
   isLoading: false,
@@ -60,12 +62,19 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   play: async (song) => {
     set({ isLoading: true, error: null, currentSong: song });
     try {
-      const { token } = await apiFetch<StreamTokenResponse>(`/songs/${song.id}/stream-token`, {
-        method: "POST",
-      });
-
       const audio = getAudio();
-      audio.src = `${API_BASE}/songs/${song.id}/stream?token=${token}`;
+
+      // Play from the offline download if we have one — no network round
+      // trip at all, and it works with no connectivity.
+      const downloaded = await getDownload(song.id);
+      if (downloaded) {
+        audio.src = URL.createObjectURL(downloaded.blob);
+      } else {
+        const { token } = await apiFetch<StreamTokenResponse>(`/songs/${song.id}/stream-token`, {
+          method: "POST",
+        });
+        audio.src = `${API_BASE}/songs/${song.id}/stream?token=${token}`;
+      }
       audio.ontimeupdate = () => set({ positionMs: audio.currentTime * 1000 });
       audio.onloadedmetadata = () => set({ durationMs: audio.duration * 1000 });
       audio.onplay = () => set({ isPlaying: true });
@@ -75,6 +84,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       audio.onpause = () => {
         set({ isPlaying: false });
         recordHistory(song.id, audio.currentTime * 1000);
+        void syncRemoteState(song.id, audio.currentTime * 1000, false);
       };
       audio.onended = () => recordHistory(song.id, audio.currentTime * 1000);
       audio.onerror = () =>
@@ -82,6 +92,10 @@ export const usePlayerStore = create<PlayerState>((set) => ({
 
       await audio.play();
       set({ isLoading: false });
+      // Pressing play "here" claims this device as Active (Sprint 8) — the
+      // explicit device switcher (Now Playing → Devices) is for moving
+      // playback to a *different* device without touching this one.
+      void syncRemoteState(song.id, audio.currentTime * 1000, true);
     } catch (e) {
       // Never surface the raw browser/DOMException message here — it leaks
       // technical wording ("Failed to load because no supported source was
@@ -109,5 +123,9 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     const audio = getAudio();
     audio.currentTime = ms / 1000;
     set({ positionMs: ms });
+    const song = get().currentSong;
+    if (song) {
+      void syncRemoteState(song.id, ms, !audio.paused);
+    }
   },
 }));

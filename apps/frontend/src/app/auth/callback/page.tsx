@@ -4,23 +4,26 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuthStore } from "@/store/auth";
+import { useWSStore } from "@/store/ws";
 
 export default function AuthCallbackPage() {
-  const setAccessToken = useAuthStore((s) => s.setAccessToken);
+  const setSession = useAuthStore((s) => s.setSession);
   const router = useRouter();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.slice(1));
     const token = params.get("access_token");
+    const deviceId = params.get("device_id");
     const error = params.get("error");
 
-    if (token) {
-      setAccessToken(token);
+    if (token && deviceId) {
+      setSession(token, deviceId);
+      void useWSStore.getState().connect();
       router.replace("/");
     } else {
       router.replace(`/login${error ? `?error=${error}` : ""}`);
     }
-  }, [router, setAccessToken]);
+  }, [router, setSession]);
 
   return (
     <main className="flex min-h-screen items-center justify-center">

@@ -32,4 +32,7 @@ type DeviceRepository interface {
 	Create(ctx context.Context, device *Device) error
 	Touch(ctx context.Context, id uuid.UUID, seenAt time.Time) error
 	Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+	// SetActive marks deviceID as the user's sole Active Device (Sprint 8
+	// Transfer Playback), clearing the flag on every other device of theirs.
+	SetActive(ctx context.Context, userID, deviceID uuid.UUID) error
 }

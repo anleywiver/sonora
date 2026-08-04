@@ -66,6 +66,29 @@ func (r *DeviceRepository) Touch(ctx context.Context, id uuid.UUID, seenAt time.
 		Update("last_seen_at", seenAt).Error
 }
 
+// SetActive is scoped to userID's own devices in both statements — a
+// deviceID belonging to someone else quietly matches nothing rather than
+// touching another user's rows or requiring a separate ownership check.
+func (r *DeviceRepository) SetActive(ctx context.Context, userID, deviceID uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Device{}).
+			Where("user_id = ? AND id <> ?", userID, deviceID).
+			Update("is_active", false).Error; err != nil {
+			return err
+		}
+		res := tx.Model(&models.Device{}).
+			Where("user_id = ? AND id = ?", userID, deviceID).
+			Update("is_active", true)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return identity.ErrNotFound
+		}
+		return nil
+	})
+}
+
 func (r *DeviceRepository) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
 	res := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&models.Device{})
 	if res.Error != nil {

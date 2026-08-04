@@ -1,12 +1,15 @@
 "use client";
 
-import { Play, Pause, Heart, ListPlus } from "lucide-react";
+import { Play, Pause, Heart, ListPlus, Download, Check } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { getDownload, saveDownload } from "@/lib/offline-db";
 import { formatDuration } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
 
 interface SongDetail {
   id: string;
@@ -43,7 +46,38 @@ export default function SongDetailPage() {
     apiFetch<Favorite[]>("/favorites?type=song")
       .then((favs) => setIsFavorite(favs.some((f) => f.target_id === id)))
       .catch(() => {});
+    getDownload(id).then((d) => setIsDownloaded(!!d));
   }, [id]);
+
+  const [isDownloaded, setIsDownloaded] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const handleDownload = async () => {
+    if (!song) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const { token } = await apiFetch<{ token: string }>(`/songs/${id}/stream-token`, {
+        method: "POST",
+      });
+      const res = await fetch(`${API_BASE}/songs/${id}/stream?token=${token}`);
+      if (!res.ok) throw new Error("download failed");
+      const blob = await res.blob();
+      await saveDownload(id, {
+        blob,
+        mimeType: blob.type,
+        title: song.title,
+        artistName: song.artist_name,
+        sizeBytes: blob.size,
+        downloadedAt: Date.now(),
+      });
+      setIsDownloaded(true);
+    } catch {
+      setDownloadError("Gagal download lagu ini.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const [queued, setQueued] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
@@ -153,6 +187,14 @@ export default function SongDetailPage() {
         >
           <ListPlus size={22} />
         </button>
+        <button
+          onClick={handleDownload}
+          disabled={downloading || isDownloaded}
+          aria-label={isDownloaded ? "Downloaded" : "Download"}
+          className={isDownloaded ? "text-success" : "text-text-secondary disabled:opacity-50"}
+        >
+          {isDownloaded ? <Check size={22} /> : <Download size={22} />}
+        </button>
       </div>
 
       {isCurrent && playerError && (
@@ -160,6 +202,10 @@ export default function SongDetailPage() {
       )}
       {queueError && <p className="mt-4 text-center text-sm text-error">{queueError}</p>}
       {queued && <p className="mt-4 text-center text-sm text-success">Ditambahkan ke queue.</p>}
+      {downloadError && <p className="mt-4 text-center text-sm text-error">{downloadError}</p>}
+      {isDownloaded && (
+        <p className="mt-4 text-center text-sm text-success">Tersedia offline.</p>
+      )}
     </main>
   );
 }

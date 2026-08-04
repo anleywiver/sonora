@@ -125,7 +125,7 @@ func main() {
 	wsTokens := wstoken.NewIssuer(redisClient)
 	playbackService := appplayback.NewService(queries)
 	wsHandler := handlers.NewWSHandler(wsTokens, wsHub, playbackService)
-	playerHandler := handlers.NewPlayerHandler(playbackService, wsHub)
+	playerHandler := handlers.NewPlayerHandler(playbackService, authService, wsHub)
 
 	requireAuth := middleware.RequireAuth(jwtIssuer)
 	requireOwner := middleware.RequireRole(string(identity.RoleOwner))
@@ -229,6 +229,7 @@ func main() {
 	playerGroup := api.Group("/player", requireAuth)
 	playerGroup.Get("/state", playerHandler.GetState)
 	playerGroup.Post("/state", playerHandler.UpdateState)
+	playerGroup.Post("/transfer", playerHandler.Transfer)
 
 	log.Fatal(app.Listen(":8080"))
 }

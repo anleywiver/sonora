@@ -86,7 +86,8 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	h.setRefreshCookie(c, pair.RefreshToken, pair.RefreshTokenExpiresAt)
 
 	redirectURL := h.frontendURL + "/auth/callback#access_token=" + pair.AccessToken +
-		"&expires_in=" + expiresInSeconds(pair.AccessTokenExpiresAt)
+		"&expires_in=" + expiresInSeconds(pair.AccessTokenExpiresAt) +
+		"&device_id=" + pair.DeviceID.String()
 	return c.Redirect(redirectURL, fiber.StatusFound)
 }
 
@@ -109,6 +110,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	return response.OK(c, fiber.StatusOK, fiber.Map{
 		"access_token": pair.AccessToken,
 		"expires_in":   int(time.Until(pair.AccessTokenExpiresAt).Seconds()),
+		"device_id":    pair.DeviceID,
 	})
 }
 

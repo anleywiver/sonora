@@ -31,17 +31,24 @@ func NewIssuer(client *redis.Client) *Issuer {
 }
 
 type claims struct {
-	UserID string `json:"user_id"`
+	UserID   string `json:"user_id"`
+	DeviceID string `json:"device_id"`
 }
 
-func (i *Issuer) Issue(ctx context.Context, userID uuid.UUID) (string, error) {
+// Claims is what Consume resolves a valid token to.
+type Claims struct {
+	UserID   uuid.UUID
+	DeviceID uuid.UUID
+}
+
+func (i *Issuer) Issue(ctx context.Context, userID, deviceID uuid.UUID) (string, error) {
 	buf := make([]byte, 24)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("wstoken: generate: %w", err)
 	}
 	token := base64.RawURLEncoding.EncodeToString(buf)
 
-	payload, err := json.Marshal(claims{UserID: userID.String()})
+	payload, err := json.Marshal(claims{UserID: userID.String(), DeviceID: deviceID.String()})
 	if err != nil {
 		return "", fmt.Errorf("wstoken: marshal: %w", err)
 	}
@@ -53,24 +60,28 @@ func (i *Issuer) Issue(ctx context.Context, userID uuid.UUID) (string, error) {
 
 // Consume validates the token and atomically deletes it (GETDEL) so two
 // connection attempts racing on the same token can't both succeed.
-func (i *Issuer) Consume(ctx context.Context, token string) (uuid.UUID, error) {
+func (i *Issuer) Consume(ctx context.Context, token string) (Claims, error) {
 	val, err := i.client.GetDel(ctx, key(token)).Result()
 	if errors.Is(err, redis.Nil) {
-		return uuid.UUID{}, ErrInvalid
+		return Claims{}, ErrInvalid
 	}
 	if err != nil {
-		return uuid.UUID{}, fmt.Errorf("wstoken: consume: %w", err)
+		return Claims{}, fmt.Errorf("wstoken: consume: %w", err)
 	}
 
 	var c claims
 	if err := json.Unmarshal([]byte(val), &c); err != nil {
-		return uuid.UUID{}, fmt.Errorf("wstoken: unmarshal: %w", err)
+		return Claims{}, fmt.Errorf("wstoken: unmarshal: %w", err)
 	}
 	userID, err := uuid.Parse(c.UserID)
 	if err != nil {
-		return uuid.UUID{}, ErrInvalid
+		return Claims{}, ErrInvalid
 	}
-	return userID, nil
+	deviceID, err := uuid.Parse(c.DeviceID)
+	if err != nil {
+		return Claims{}, ErrInvalid
+	}
+	return Claims{UserID: userID, DeviceID: deviceID}, nil
 }
 
 func key(token string) string {

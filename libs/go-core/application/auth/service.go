@@ -21,6 +21,11 @@ type TokenPair struct {
 	AccessTokenExpiresAt  time.Time
 	RefreshToken          string
 	RefreshTokenExpiresAt time.Time
+	// DeviceID lets the frontend know "which device am I" — needed for
+	// Active Device (Sprint 8): comparing against playback_state's
+	// active_device_id and passing to /ws/token. Not carried in the JWT
+	// itself (access tokens are deliberately device-agnostic).
+	DeviceID uuid.UUID
 }
 
 type Service struct {
@@ -181,6 +186,15 @@ func (s *Service) RemoveDevice(ctx context.Context, deviceID, userID uuid.UUID) 
 	return s.tokens.RevokeAllForDevice(ctx, deviceID, time.Now())
 }
 
+// SetActiveDevice marks deviceID as the user's Active Device (Sprint 8
+// Transfer Playback) — devices.is_active bookkeeping only; the
+// authoritative active device for playback purposes is
+// playback_states.active_device_id (application/playback), kept in sync
+// by the caller (PlayerHandler.Transfer).
+func (s *Service) SetActiveDevice(ctx context.Context, userID, deviceID uuid.UUID) error {
+	return s.devices.SetActive(ctx, userID, deviceID)
+}
+
 func (s *Service) issueTokenPair(ctx context.Context, user *identity.User, deviceID uuid.UUID) (*TokenPair, error) {
 	access, accessExp, err := s.jwt.Issue(user.ID, string(user.Role))
 	if err != nil {
@@ -212,5 +226,6 @@ func (s *Service) issueTokenPair(ctx context.Context, user *identity.User, devic
 		AccessTokenExpiresAt:  accessExp,
 		RefreshToken:          rawRefresh,
 		RefreshTokenExpiresAt: refreshExp,
+		DeviceID:              deviceID,
 	}, nil
 }

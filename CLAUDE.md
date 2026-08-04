@@ -48,11 +48,78 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 7 selesai — lanjut Sprint 8 (Active Device + PWA)
+## Status saat ini: Sprint 8 selesai — lanjut Sprint 9 (Multi-drive pool)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 8 (selesai)
+
+Sprint 8 (Active Device + PWA) selesai 100% (2026-08-05). Lihat
+`docs/decisions/0003-active-device-ui-placement.md` — `docs/screens-spec.md`
+tidak pernah mendesain UI Transfer Playback sama sekali, jadi ini
+keputusan baru (bukan penyimpangan dari spec, spec-nya memang belum ada).
+
+Backend:
+- [x] `TokenPair` (application/auth) sekarang bawa `DeviceID` — sebelum
+      Sprint 8, `device_id` yang dibuat saat OAuth callback/refresh tidak
+      pernah dikembalikan ke frontend (gap yang baru ketahuan sekarang,
+      lihat ADR 0003). `POST /auth/refresh` dan redirect `/auth/callback`
+      sekarang menyertakannya.
+- [x] `wstoken` diperluas: token sekarang bawa `device_id` juga (bukan cuma
+      `user_id`), supaya hub bisa relay ke device tertentu
+- [x] `ws.Hub` — `SendToDevice` selain `Broadcast`; `POST /player/transfer`
+      set `playback_state.active_device_id` + sinkron `devices.is_active`
+      (transaksi 2 UPDATE — clear semua device lain punya user itu, set 1)
+- [x] Relay `player:command`: device yang BUKAN Active mengirim command
+      lewat WS → di-relay ke device yang Active saja; kalau si pengirim
+      KEBETULAN device yang aktif, tidak di-relay (device aktif eksekusi
+      langsung, bukan lewat WS ke diri sendiri)
+- [x] Endpoint `/player/transfer` TIDAK menegakkan "hanya Active Device
+      boleh update state" secara server-side — batasnya di client (device
+      non-aktif kirim command lewat WS, bukan panggil `/player/state`
+      langsung). Cukup untuk skala personal/keluarga, dicatat sebagai
+      potential hardening kalau perlu nanti.
+
+Frontend:
+- [x] `store/auth.ts` sekarang simpan `deviceId` juga (dari `/auth/callback`
+      fragment ATAU `/auth/refresh` response)
+- [x] `store/ws.ts` — connect WS pakai `device_id`, dengar `player:state`
+      buat tahu device mana yang aktif
+- [x] `player.ts` — main lagu "di sini" otomatis klaim device ini jadi
+      Active (`syncRemoteState`), sama seperti behavior Spotify Connect
+      yang jadi referensi sejak awal; device switcher eksplisit
+      (`/devices`, link dari Now Playing) buat transfer ke device LAIN
+- [x] `/devices` — list device, tap → `POST /player/transfer`
+- [x] PWA: `public/manifest.json`, `public/icon.svg`, `public/sw.js`
+      (network-first, TIDAK precache app shell karena asset Next.js
+      di-hash per build — precache di sini malah lawan cache-busting
+      framework-nya sendiri)
+- [x] Offline download: `lib/offline-db.ts` (IndexedDB native, tanpa
+      dependency baru), tombol download di song detail, `/downloads` (list
+      + hapus manual — TIDAK ada auto-LRU sesuai roadmap). `player.ts` cek
+      IndexedDB dulu sebelum stream network kalau ada
+
+Diverifikasi jauh lebih dalam dari sprint-sprint sebelumnya karena
+melibatkan 2 "device" sekaligus:
+1. WS client Go asli (bukan browser) — handshake, transfer, relay
+   `player:command` ke device aktif SAJA, device aktif tidak nge-relay ke
+   diri sendiri, `devices.is_active` sinkron dengan benar.
+2. Playwright browser asli — WebSocket connection BENERAN kebuka dari
+   browser (`page.on("websocket")`, bukan cuma diasumsikan dari kode),
+   Transfer Playback dari UI asli (klik device di `/devices`) memicu
+   broadcast `player:state` yang keliatan lewat network trace, service
+   worker ke-registrasi dan **activated**, dan yang paling penting:
+   offline test sungguhan — visit halaman online dulu, `context.setOffline(true)`,
+   reload, halaman tetap render dari cache SW. Bukan asumsi "seharusnya
+   jalan", tapi dibuktikan literally di browser tanpa network.
+
+**Butuh input manual dari user**: sama seperti sprint-sprint sebelumnya,
+download lagu asli (dan karenanya offline playback asli) masih menunggu
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` + refresh token Drive asli —
+tombol download sudah lengkap dan gagal dengan rapi (pesan error jelas)
+tanpa itu.
 
 ### Sprint 7 (selesai)
 

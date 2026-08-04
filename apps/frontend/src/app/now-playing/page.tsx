@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ListMusic, Mic2, Pause, Play } from "lucide-react";
+import { ChevronDown, ListMusic, Mic2, Pause, Play, Speaker } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -81,6 +81,10 @@ export default function NowPlayingPage() {
         <Link href="/queue" aria-label="Queue" className="flex flex-col items-center gap-1 text-xs">
           <ListMusic size={20} />
           Queue
+        </Link>
+        <Link href="/devices" aria-label="Devices" className="flex flex-col items-center gap-1 text-xs">
+          <Speaker size={20} />
+          Devices
         </Link>
       </div>
     </main>
