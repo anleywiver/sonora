@@ -1,8 +1,11 @@
 "use client";
 
+import { Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
 import { usePlayerStore } from "@/store/player";
 
@@ -26,6 +29,7 @@ interface TrendingItem {
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [continueListening, setContinueListening] = useState<ContinueListeningItem[]>([]);
   const [trending, setTrending] = useState<TrendingItem[]>([]);
   const [me, setMe] = useState<Me | null>(null);
@@ -110,17 +114,13 @@ export default function HomePage() {
       )}
 
       {continueListening.length === 0 && trending.length === 0 && (
-        <p className="mt-6 text-sm text-text-secondary">
-          Belum ada lagu untuk ditampilkan. Mulai dengan mencari sesuatu.
-        </p>
+        <EmptyState
+          icon={Sparkles}
+          message="Belum ada lagu untuk ditampilkan. Mulai dengan mencari sesuatu."
+          ctaLabel="Cari lagu"
+          onCtaClick={() => router.push("/search")}
+        />
       )}
-
-      <Link
-        href="/search"
-        className="mt-6 block w-fit rounded-2xl bg-primary px-6 py-3 text-sm font-semibold text-white"
-      >
-        Cari lagu
-      </Link>
     </main>
   );
 }

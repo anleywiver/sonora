@@ -1,9 +1,10 @@
 "use client";
 
-import { Search as SearchIcon } from "lucide-react";
+import { Search as SearchIcon, SearchX } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
 import { formatDuration } from "@/lib/utils";
 
@@ -167,9 +168,7 @@ export default function SearchPage() {
       </ul>
 
       {!loading && query.trim() && results.length === 0 && (
-        <p className="mt-6 text-sm text-text-secondary">
-          Tidak ada hasil untuk &quot;{query}&quot;.
-        </p>
+        <EmptyState icon={SearchX} message="Tidak ada hasil untuk pencarian ini." />
       )}
     </main>
   );

@@ -1,9 +1,10 @@
 "use client";
 
-import { Download, Plus, Search } from "lucide-react";
+import { Download, Music, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
 import { cn, formatDuration } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
@@ -200,7 +201,20 @@ function SongsTab({ search, sortAlpha }: { search: string; sortAlpha: boolean })
   }, [search, sortAlpha]);
 
   if (!songs) return <p className="text-sm text-text-secondary">Memuat...</p>;
-  if (songs.length === 0) return <p className="text-sm text-text-secondary">Tidak ada lagu.</p>;
+  if (songs.length === 0) {
+    // "Upload lagu" CTA from ui-implementation-spec.md #2.4 is omitted —
+    // there's no upload UI anywhere in this app yet (ingest has only ever
+    // been exercised via the API directly), so a button here would just
+    // be a dead link. Filtered-empty (an active search with no matches)
+    // gets a distinct, simpler message instead of implying the whole
+    // library is empty.
+    if (search.trim()) {
+      return <p className="text-sm text-text-secondary">Tidak ada lagu untuk &quot;{search}&quot;.</p>;
+    }
+    return (
+      <EmptyState icon={Music} message="Koleksi lagu kamu masih kosong. Upload lagu pertamamu sekarang." />
+    );
+  }
 
   return (
     <ul className="space-y-2">

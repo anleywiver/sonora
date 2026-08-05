@@ -1,9 +1,11 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
 import { deleteDownload, listDownloads } from "@/lib/offline-db";
 
 interface DownloadItem {
@@ -19,6 +21,7 @@ function formatSize(bytes: number): string {
 }
 
 export default function DownloadsPage() {
+  const router = useRouter();
   const [items, setItems] = useState<DownloadItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -80,10 +83,12 @@ export default function DownloadsPage() {
       </ul>
 
       {!loading && items.length === 0 && (
-        <p className="mt-6 text-sm text-text-secondary">
-          Belum ada lagu yang di-download. Buka lagu dan tap ikon download untuk
-          menyimpannya untuk didengar offline.
-        </p>
+        <EmptyState
+          icon={Download}
+          message="Belum ada lagu yang didownload untuk offline."
+          ctaLabel="Jelajahi lagu"
+          onCtaClick={() => router.push("/search")}
+        />
       )}
     </main>
   );

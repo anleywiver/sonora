@@ -2,8 +2,10 @@
 
 import { Heart } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +67,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function FavoritePage() {
+  const router = useRouter();
   const [favorites, setFavorites] = useState<ResolvedFavorite[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("song");
@@ -145,9 +148,12 @@ export default function FavoritePage() {
       </ul>
 
       {!loading && filtered.length === 0 && (
-        <p className="mt-6 text-sm text-text-secondary">
-          Belum ada {TABS.find((t) => t.key === tab)?.label.toLowerCase()} favorite.
-        </p>
+        <EmptyState
+          icon={Heart}
+          message="Belum ada favorite. Mulai dengan menandai lagu yang kamu suka."
+          ctaLabel="Cari lagu"
+          onCtaClick={() => router.push("/search")}
+        />
       )}
     </main>
   );
