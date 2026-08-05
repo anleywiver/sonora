@@ -131,7 +131,7 @@ function PlaylistsTab() {
       <div className="flex items-center justify-between">
         <Link
           href="/downloads"
-          className="flex flex-1 items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5"
+          className="flex flex-1 items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5 backdrop-blur-md"
         >
           <Download size={18} className="text-text-secondary" />
           <span className="text-sm font-medium">Downloads</span>
@@ -241,7 +241,7 @@ function AlbumsTab({ search, sortAlpha }: { search: string; sortAlpha: boolean }
   return (
     <div className="grid grid-cols-2 gap-3">
       {albums.map((a) => (
-        <Link key={a.id} href={`/album/${a.id}`} className="rounded-[18px] border border-border bg-white/5 p-3">
+        <Link key={a.id} href={`/album/${a.id}`} className="rounded-[18px] border border-border bg-white/5 p-3 backdrop-blur-md">
           <div className="aspect-square w-full rounded-xl bg-gradient-to-br from-accent to-primary" />
           <p className="mt-2 truncate text-sm font-medium">{a.title}</p>
           <p className="truncate text-xs text-text-secondary">{a.artist_name}</p>
@@ -270,7 +270,7 @@ function ArtistsTab({ search, sortAlpha }: { search: string; sortAlpha: boolean 
     <ul className="space-y-2">
       {artists.map((a) => (
         <li key={a.id}>
-          <Link href={`/artist/${a.id}`} className="flex items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5">
+          <Link href={`/artist/${a.id}`} className="flex items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5 backdrop-blur-md">
             <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gradient-to-br from-accent to-primary" />
             <p className="truncate text-sm font-medium">{a.name}</p>
           </Link>

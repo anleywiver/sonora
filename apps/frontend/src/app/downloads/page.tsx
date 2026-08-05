@@ -61,7 +61,7 @@ export default function DownloadsPage() {
         {items.map((item) => (
           <li
             key={item.songId}
-            className="flex items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5"
+            className="flex items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5 backdrop-blur-md"
           >
             <Link href={`/song/${item.songId}`} className="flex min-w-0 flex-1 items-center gap-3">
               <div className="h-12 w-12 flex-shrink-0 rounded-xl bg-gradient-to-br from-accent to-primary" />

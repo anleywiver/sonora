@@ -65,7 +65,7 @@ export default function HomePage() {
                 <Link
                   key={item.song_id}
                   href={`/song/${item.song_id}`}
-                  className="w-36 flex-shrink-0 rounded-[18px] border border-border bg-white/5 p-3"
+                  className="w-36 flex-shrink-0 rounded-[18px] border border-border bg-white/5 p-3 backdrop-blur-md"
                 >
                   <div className="h-28 w-full rounded-xl bg-gradient-to-br from-accent to-primary" />
                   <p className="mt-2 truncate text-xs font-medium">{item.title}</p>
@@ -95,7 +95,7 @@ export default function HomePage() {
                       durationMs: song.duration_ms,
                     })
                   }
-                  className="flex w-full items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3 text-left"
+                  className="flex w-full items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3 text-left backdrop-blur-md"
                 >
                   <div className="h-10 w-10 flex-shrink-0 rounded-xl bg-gradient-to-br from-accent to-primary" />
                   <div className="min-w-0">

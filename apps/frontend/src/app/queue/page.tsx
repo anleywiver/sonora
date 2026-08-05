@@ -55,7 +55,7 @@ export default function QueuePage() {
       {currentSong && (
         <div className="mt-6">
           <p className="text-xs text-text-secondary">Now Playing</p>
-          <div className="mt-2 flex items-center gap-3 rounded-[18px] border border-border bg-accent/10 p-3.5">
+          <div className="mt-2 flex items-center gap-3 rounded-[18px] border border-border bg-accent/10 p-3.5 backdrop-blur-md">
             <div className="h-10 w-10 flex-shrink-0 rounded-xl bg-gradient-to-br from-accent to-primary" />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{currentSong.title}</p>
@@ -71,7 +71,7 @@ export default function QueuePage() {
         {items.map((item) => (
           <li
             key={item.id}
-            className="flex items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5"
+            className="flex items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5 backdrop-blur-md"
           >
             <div className="h-10 w-10 flex-shrink-0 rounded-xl bg-gradient-to-br from-accent to-primary" />
             <div className="min-w-0 flex-1">

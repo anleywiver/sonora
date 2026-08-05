@@ -73,7 +73,7 @@ export default function DevicesPage() {
               <button
                 onClick={() => handleTransfer(d.id)}
                 disabled={transferring === d.id}
-                className="flex w-full items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5 text-left disabled:opacity-50"
+                className="flex w-full items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5 text-left backdrop-blur-md disabled:opacity-50"
               >
                 <Icon size={20} className="text-text-secondary" />
                 <div className="min-w-0 flex-1">

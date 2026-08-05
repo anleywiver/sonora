@@ -103,8 +103,14 @@ export default function PlaylistDetailPage() {
   }
 
   return (
-    <main className="min-h-screen px-4 pb-32 pt-6">
-      <div className="mx-auto h-40 w-40 rounded-2xl bg-gradient-to-br from-accent to-primary" />
+    <main className="relative min-h-screen overflow-hidden px-4 pb-32 pt-6">
+      {/* Hero gradient (screens-spec #10) — see song/[id]/page.tsx for why
+          this is a fixed tint rather than per-cover color extraction. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-primary/25 to-transparent"
+        aria-hidden
+      />
+      <div className="relative mx-auto h-40 w-40 rounded-2xl bg-gradient-to-br from-accent to-primary" />
       <div className="mt-4 text-center">
         <h1 className="text-xl font-bold">{playlist.name}</h1>
         {playlist.description && (
@@ -138,7 +144,7 @@ export default function PlaylistDetailPage() {
               <li key={r.id}>
                 <button
                   onClick={() => handleAdd(r.id)}
-                  className="flex w-full items-center justify-between rounded-[18px] border border-border bg-white/5 p-3 text-left"
+                  className="flex w-full items-center justify-between rounded-[18px] border border-border bg-white/5 p-3 text-left backdrop-blur-md"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.title}</p>
