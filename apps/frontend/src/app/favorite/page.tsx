@@ -2,9 +2,10 @@
 
 import { Heart } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface Favorite {
   id: string;
@@ -55,9 +56,18 @@ async function resolveFavorite(f: Favorite): Promise<ResolvedFavorite | null> {
   }
 }
 
+type Tab = "song" | "album" | "artist" | "playlist";
+const TABS: { key: Tab; label: string }[] = [
+  { key: "song", label: "Songs" },
+  { key: "album", label: "Albums" },
+  { key: "artist", label: "Artists" },
+  { key: "playlist", label: "Playlists" },
+];
+
 export default function FavoritePage() {
   const [favorites, setFavorites] = useState<ResolvedFavorite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>("song");
 
   useEffect(() => {
     apiFetch<Favorite[]>("/favorites")
@@ -67,6 +77,8 @@ export default function FavoritePage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const filtered = useMemo(() => favorites.filter((f) => f.type === tab), [favorites, tab]);
 
   const handleUnfavorite = async (f: Favorite) => {
     await apiFetch("/favorites", {
@@ -81,10 +93,25 @@ export default function FavoritePage() {
     <main className="min-h-screen px-4 pb-32 pt-6">
       <h1 className="text-xl font-bold">Favorite</h1>
 
+      <div className="mt-4 flex gap-2 overflow-x-auto">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium",
+              tab === t.key ? "bg-primary text-white" : "border border-border text-text-secondary",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {loading && <p className="mt-6 text-sm text-text-secondary">Memuat...</p>}
 
       <ul className="mt-4 space-y-2">
-        {favorites.map((f) => (
+        {filtered.map((f) => (
           <li
             key={f.id}
             className="flex items-center gap-3 rounded-[18px] border border-border bg-white/5 p-3.5 backdrop-blur-md"
@@ -117,8 +144,10 @@ export default function FavoritePage() {
         ))}
       </ul>
 
-      {!loading && favorites.length === 0 && (
-        <p className="mt-6 text-sm text-text-secondary">Belum ada favorite.</p>
+      {!loading && filtered.length === 0 && (
+        <p className="mt-6 text-sm text-text-secondary">
+          Belum ada {TABS.find((t) => t.key === tab)?.label.toLowerCase()} favorite.
+        </p>
       )}
     </main>
   );
