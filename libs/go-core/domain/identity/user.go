@@ -36,10 +36,12 @@ type User struct {
 
 func (u User) IsOwner() bool { return u.Role == RoleOwner }
 
-// IsPending is true for an invited user who has never actually logged in
-// via Google yet (ADR 0009) — the admin Manage Users page shows this as
-// a distinct "Invited" status rather than "Active".
-func (u User) IsPending() bool { return u.GoogleID == "" }
+// IsPending is true only for an invited user who has no way to log in at
+// all yet — no Google claim (ADR 0009) AND no password (ADR 0012). A
+// credential-based user (seed-owner, or "Add User") never has a
+// GoogleID but is fully active from creation, so GoogleID alone can't
+// signal "pending" anymore now that credential auth exists.
+func (u User) IsPending() bool { return u.GoogleID == "" && u.PasswordHash == "" }
 
 type UserRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*User, error)
