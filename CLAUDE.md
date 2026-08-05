@@ -48,13 +48,13 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 14 (UI Fidelity & Production Readiness) — struktur inti selesai, penyisipan fitur tambahan atas permintaan user sedang berjalan (lihat "Riwayat Sprint" di bawah)
+## Status saat ini: Sprint 14 (UI Fidelity & Production Readiness) — SELESAI, termasuk semua sisipan atas permintaan user (lihat "Riwayat Sprint" di bawah). Ini sprint terakhir di `docs/roadmap.md` — sisa pekerjaan tinggal kredensial eksternal & deployment VPS asli (lihat penutup bagian ini), bukan coding.
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
 
-### Sprint 14 (berjalan — struktur inti selesai)
+### Sprint 14 (selesai, termasuk semua sisipan)
 
 Sprint 14 (UI Fidelity & Production Readiness) inti selesai (2026-08-05):
 halaman yang tadinya kosong dibangun dengan data asli, image production
