@@ -17,6 +17,7 @@ import (
 
 	appadminsongs "sonora.dev/go-core/application/adminsongs"
 	appanalytics "sonora.dev/go-core/application/analytics"
+	appsettings "sonora.dev/go-core/application/appsettings"
 	appauth "sonora.dev/go-core/application/auth"
 	appcatalog "sonora.dev/go-core/application/catalog"
 	appdashboard "sonora.dev/go-core/application/dashboard"
@@ -82,12 +83,16 @@ func main() {
 	userRepo := repository.NewUserRepository(gormDB)
 	deviceRepo := repository.NewDeviceRepository(gormDB)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(gormDB)
+	appSettingsRepo := repository.NewAppSettingsRepository(gormDB)
 
 	googleClient := oauth.NewGoogleClient(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GoogleRedirectURL)
 	jwtIssuer := jwt.NewIssuer(cfg.JWTAccessSecret, accessTokenTTL)
 
+	appSettingsService := appsettings.NewService(appSettingsRepo)
+	adminSettingsHandler := handlers.NewAdminSettingsHandler(appSettingsService)
+
 	authService := appauth.NewService(userRepo, deviceRepo, refreshTokenRepo, googleClient, jwtIssuer, refreshTokenTTL)
-	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL, cfg.AdminURL)
+	authHandler := handlers.NewAuthHandler(authService, appSettingsService, cfg.FrontendURL, cfg.AdminURL)
 	deviceHandler := handlers.NewDeviceHandler(authService)
 
 	credentialsBox, err := crypto.NewBox(cfg.StorageCredentialsEncryptionKey)
@@ -159,6 +164,7 @@ func main() {
 
 	requireAuth := middleware.RequireAuth(jwtIssuer)
 	requireOwner := middleware.RequireRole(string(identity.RoleOwner))
+	maintenanceGate := middleware.MaintenanceGate(appSettingsService)
 
 	app := fiber.New(fiber.Config{
 		AppName: "Sonora API v1",
@@ -203,19 +209,31 @@ func main() {
 		Expiration: time.Minute,
 	})
 
+	// Sprint 14 sisipan (ADR 0012): credential login endpoints rate-limited
+	// tighter than the general auth limiter — brute-force is the most
+	// realistic threat against username/password now that it's the
+	// default login path.
+	credentialLoginLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: time.Minute,
+	})
+
 	authGroup := api.Group("/auth")
+	authGroup.Get("/config", authHandler.Config)
 	authGroup.Get("/google", authLimiter, authHandler.GoogleLogin)
 	authGroup.Get("/google/callback", authLimiter, authHandler.GoogleCallback)
+	authGroup.Post("/login", credentialLoginLimiter, authHandler.Login)
+	authGroup.Post("/login/admin", credentialLoginLimiter, authHandler.LoginAdmin)
 	authGroup.Post("/refresh", authLimiter, authHandler.Refresh)
 	authGroup.Post("/logout", requireAuth, authHandler.Logout)
 	authGroup.Post("/logout-all", requireAuth, requireOwner, authHandler.LogoutAll)
 	authGroup.Get("/me", requireAuth, authHandler.Me)
 	authGroup.Put("/me", requireAuth, authHandler.UpdateMe)
 
-	api.Get("/devices", requireAuth, deviceHandler.List)
-	api.Delete("/devices/:id", requireAuth, deviceHandler.Delete)
+	api.Get("/devices", requireAuth, maintenanceGate, deviceHandler.List)
+	api.Delete("/devices/:id", requireAuth, maintenanceGate, deviceHandler.Delete)
 
-	ingestGroup := api.Group("/ingest", requireAuth)
+	ingestGroup := api.Group("/ingest", requireAuth, maintenanceGate)
 	ingestGroup.Post("/upload", ingestHandler.Upload)
 	ingestGroup.Get("/jobs", ingestHandler.List)
 	ingestGroup.Get("/jobs/:id", ingestHandler.Get)
@@ -244,29 +262,32 @@ func main() {
 	adminGroup.Delete("/ingest-sources/:source_type/filters/:id", ingestFilterHandler.Delete)
 	adminGroup.Get("/users", usersHandler.List)
 	adminGroup.Post("/users/invite", usersHandler.Invite)
+	adminGroup.Post("/users", usersHandler.Create)
 	adminGroup.Delete("/users/:id", usersHandler.Delete)
 	adminGroup.Get("/songs", adminSongsHandler.List)
 	adminGroup.Patch("/songs/:id", adminSongsHandler.Update)
 	adminGroup.Delete("/songs/:id", adminSongsHandler.Delete)
+	adminGroup.Get("/settings", adminSettingsHandler.List)
+	adminGroup.Patch("/settings", adminSettingsHandler.Update)
 
-	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
-	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)
+	api.Get("/songs/:id", requireAuth, maintenanceGate, catalogHandler.GetSong)
+	api.Post("/songs/:id/stream-token", requireAuth, maintenanceGate, catalogHandler.StreamToken)
 	// No requireAuth: the browser <audio> element can't send a custom
 	// Authorization header, so this route is guarded by the stream token
 	// query param instead (ADR 0001).
 	api.Get("/songs/:id/stream", catalogHandler.Stream)
-	api.Get("/albums/:id", requireAuth, catalogHandler.GetAlbum)
-	api.Get("/artists/:id", requireAuth, catalogHandler.GetArtist)
-	api.Get("/artists/:id/albums", requireAuth, catalogHandler.ListArtistAlbums)
-	api.Get("/artists/:id/songs", requireAuth, catalogHandler.ListArtistSongs)
-	api.Get("/genres", requireAuth, catalogHandler.ListGenres)
+	api.Get("/albums/:id", requireAuth, maintenanceGate, catalogHandler.GetAlbum)
+	api.Get("/artists/:id", requireAuth, maintenanceGate, catalogHandler.GetArtist)
+	api.Get("/artists/:id/albums", requireAuth, maintenanceGate, catalogHandler.ListArtistAlbums)
+	api.Get("/artists/:id/songs", requireAuth, maintenanceGate, catalogHandler.ListArtistSongs)
+	api.Get("/genres", requireAuth, maintenanceGate, catalogHandler.ListGenres)
 
-	searchGroup := api.Group("/search", requireAuth)
+	searchGroup := api.Group("/search", requireAuth, maintenanceGate)
 	searchGroup.Get("", searchHandler.Search)
 	searchGroup.Get("/autocomplete", searchHandler.Autocomplete)
 	searchGroup.Get("/trending", searchHandler.Trending)
 
-	playlistGroup := api.Group("/playlists", requireAuth)
+	playlistGroup := api.Group("/playlists", requireAuth, maintenanceGate)
 	playlistGroup.Post("", playlistHandler.Create)
 	playlistGroup.Get("", playlistHandler.List)
 	playlistGroup.Get("/:id", playlistHandler.Get)
@@ -276,36 +297,36 @@ func main() {
 	playlistGroup.Patch("/:id/songs/:song_row_id", playlistHandler.UpdateSongPosition)
 	playlistGroup.Delete("/:id/songs/:song_row_id", playlistHandler.RemoveSong)
 
-	favoriteGroup := api.Group("/favorites", requireAuth)
+	favoriteGroup := api.Group("/favorites", requireAuth, maintenanceGate)
 	favoriteGroup.Get("", favoriteHandler.List)
 	favoriteGroup.Post("", favoriteHandler.Create)
 	favoriteGroup.Delete("", favoriteHandler.Delete)
 
-	api.Get("/songs/:id/lyrics", requireAuth, lyricsHandler.Get)
+	api.Get("/songs/:id/lyrics", requireAuth, maintenanceGate, lyricsHandler.Get)
 
-	historyGroup := api.Group("/history", requireAuth)
+	historyGroup := api.Group("/history", requireAuth, maintenanceGate)
 	historyGroup.Get("", historyHandler.List)
 	historyGroup.Post("", historyHandler.Create)
-	api.Get("/library/continue-listening", requireAuth, historyHandler.ContinueListening)
-	api.Get("/library/songs", requireAuth, catalogHandler.ListLibrarySongs)
-	api.Get("/library/albums", requireAuth, catalogHandler.ListLibraryAlbums)
-	api.Get("/library/artists", requireAuth, catalogHandler.ListLibraryArtists)
+	api.Get("/library/continue-listening", requireAuth, maintenanceGate, historyHandler.ContinueListening)
+	api.Get("/library/songs", requireAuth, maintenanceGate, catalogHandler.ListLibrarySongs)
+	api.Get("/library/albums", requireAuth, maintenanceGate, catalogHandler.ListLibraryAlbums)
+	api.Get("/library/artists", requireAuth, maintenanceGate, catalogHandler.ListLibraryArtists)
 
-	queueGroup := api.Group("/queue", requireAuth)
+	queueGroup := api.Group("/queue", requireAuth, maintenanceGate)
 	queueGroup.Get("", queueHandler.List)
 	queueGroup.Post("", queueHandler.Add)
 	queueGroup.Patch("/:id", queueHandler.UpdatePosition)
 	queueGroup.Delete("/:id", queueHandler.Remove)
 	queueGroup.Delete("", queueHandler.Clear)
 
-	api.Post("/ws/token", requireAuth, wsHandler.IssueToken)
+	api.Post("/ws/token", requireAuth, maintenanceGate, wsHandler.IssueToken)
 	// No requireAuth: the WS handshake can't send a custom Authorization
 	// header, so it's guarded by the single-use ws-token query param
 	// (consumed in UpgradeGate) instead — same reasoning as the stream
 	// endpoint (ADR 0001).
 	app.Get("/ws", wsHandler.UpgradeGate, websocket.New(wsHandler.Handle))
 
-	playerGroup := api.Group("/player", requireAuth)
+	playerGroup := api.Group("/player", requireAuth, maintenanceGate)
 	playerGroup.Get("/state", playerHandler.GetState)
 	playerGroup.Post("/state", playerHandler.UpdateState)
 	playerGroup.Post("/transfer", playerHandler.Transfer)

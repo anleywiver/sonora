@@ -11,6 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"sonora.dev/go-core/application/appsettings"
 	appauth "sonora.dev/go-core/application/auth"
 	"sonora.dev/go-core/domain/identity"
 
@@ -26,12 +27,31 @@ const (
 
 type AuthHandler struct {
 	service     *appauth.Service
+	settings    *appsettings.Service
 	frontendURL string
 	adminURL    string
 }
 
-func NewAuthHandler(service *appauth.Service, frontendURL, adminURL string) *AuthHandler {
-	return &AuthHandler{service: service, frontendURL: frontendURL, adminURL: adminURL}
+func NewAuthHandler(service *appauth.Service, settings *appsettings.Service, frontendURL, adminURL string) *AuthHandler {
+	return &AuthHandler{service: service, settings: settings, frontendURL: frontendURL, adminURL: adminURL}
+}
+
+// Config is public (no auth) — the Login page (both apps) needs to know
+// whether to show the Google button BEFORE there's any token at all
+// (Sprint 14 sisipan, ADR 0012).
+func (h *AuthHandler) Config(c *fiber.Ctx) error {
+	values, err := h.settings.List(c.Context())
+	if err != nil {
+		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to load config")
+	}
+	appName := values[appsettings.KeyAppName]
+	if appName == "" {
+		appName = "Sonora"
+	}
+	return response.OK(c, fiber.StatusOK, fiber.Map{
+		"google_oauth_enabled": values[appsettings.KeyGoogleOAuthEnabled] == "true",
+		"app_name":             appName,
+	})
 }
 
 // GoogleLogin redirects to Google's consent screen. The state nonce is
@@ -41,6 +61,10 @@ func NewAuthHandler(service *appauth.Service, frontendURL, adminURL string) *Aut
 // hand off to the main frontend or the admin app — Sprint 9's Drive
 // Manager needs its own login, same Google account, same Owner check.
 func (h *AuthHandler) GoogleLogin(c *fiber.Ctx) error {
+	if !h.settings.IsGoogleOAuthEnabled(c.Context()) {
+		return response.Fail(c, fiber.StatusForbidden, "google_oauth_disabled", "Google login sedang dinonaktifkan admin")
+	}
+
 	app := "frontend"
 	if c.Query("app") == "admin" {
 		app = "admin"
@@ -69,6 +93,10 @@ func (h *AuthHandler) GoogleLogin(c *fiber.Ctx) error {
 // httpOnly cookie, access token in the redirect fragment (never sent to
 // any server, unlike a query string).
 func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
+	if !h.settings.IsGoogleOAuthEnabled(c.Context()) {
+		return response.Fail(c, fiber.StatusForbidden, "google_oauth_disabled", "Google login sedang dinonaktifkan admin")
+	}
+
 	state := c.Query("state")
 	cookieState := c.Cookies(stateCookieName)
 	c.ClearCookie(stateCookieName)
@@ -113,6 +141,73 @@ func (h *AuthHandler) resolveTargetURL(state string) string {
 		return h.adminURL
 	}
 	return h.frontendURL
+}
+
+type loginAdminRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// LoginAdmin is the admin app's credential login (Sprint 14 sisipan,
+// ADR 0012) — email+password, must resolve to role Owner.
+func (h *AuthHandler) LoginAdmin(c *fiber.Ctx) error {
+	var req loginAdminRequest
+	if err := c.BodyParser(&req); err != nil || req.Email == "" || req.Password == "" {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "email and password are required")
+	}
+
+	deviceName := c.Get(fiber.HeaderUserAgent)
+	if deviceName == "" {
+		deviceName = "Unknown Device"
+	}
+	if len(deviceName) > 120 {
+		deviceName = deviceName[:120]
+	}
+
+	_, pair, err := h.service.LoginAdmin(c.Context(), req.Email, req.Password, deviceName, identity.DeviceWeb)
+	if err != nil {
+		return response.Fail(c, fiber.StatusUnauthorized, "unauthenticated", "email atau password salah")
+	}
+
+	h.setRefreshCookie(c, pair.RefreshToken, pair.RefreshTokenExpiresAt)
+	return response.OK(c, fiber.StatusOK, fiber.Map{
+		"access_token": pair.AccessToken,
+		"expires_in":   int(time.Until(pair.AccessTokenExpiresAt).Seconds()),
+		"device_id":    pair.DeviceID,
+	})
+}
+
+type loginMemberRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// Login is the main app's credential login — username+password.
+func (h *AuthHandler) Login(c *fiber.Ctx) error {
+	var req loginMemberRequest
+	if err := c.BodyParser(&req); err != nil || req.Username == "" || req.Password == "" {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "username and password are required")
+	}
+
+	deviceName := c.Get(fiber.HeaderUserAgent)
+	if deviceName == "" {
+		deviceName = "Unknown Device"
+	}
+	if len(deviceName) > 120 {
+		deviceName = deviceName[:120]
+	}
+
+	_, pair, err := h.service.LoginMember(c.Context(), req.Username, req.Password, deviceName, identity.DeviceWeb)
+	if err != nil {
+		return response.Fail(c, fiber.StatusUnauthorized, "unauthenticated", "username atau password salah")
+	}
+
+	h.setRefreshCookie(c, pair.RefreshToken, pair.RefreshTokenExpiresAt)
+	return response.OK(c, fiber.StatusOK, fiber.Map{
+		"access_token": pair.AccessToken,
+		"expires_in":   int(time.Until(pair.AccessTokenExpiresAt).Seconds()),
+		"device_id":    pair.DeviceID,
+	})
 }
 
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {

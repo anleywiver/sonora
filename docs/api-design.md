@@ -14,8 +14,11 @@ Base URL: `https://api.sonora.local/api/v1` (dev) — semua endpoint di bawah re
 
 | Method | Endpoint | Auth |
 |---|---|---|
-| GET | `/auth/google` | Public |
-| GET | `/auth/google/callback` | Public |
+| GET | `/auth/config` | Public — Sprint 14 sisipan, ADR 0012. `{google_oauth_enabled, app_name}`, dibaca dari `app_settings` |
+| GET | `/auth/google` | Public — 403 kalau `app_settings.google_oauth_enabled=false` |
+| GET | `/auth/google/callback` | Public — 403 kalau `app_settings.google_oauth_enabled=false` |
+| POST | `/auth/login` | Public, rate-limited 5/menit/IP — Sprint 14 sisipan, ADR 0012. Body `{username, password}`, role member |
+| POST | `/auth/login/admin` | Public, rate-limited 5/menit/IP — Sprint 14 sisipan, ADR 0012. Body `{email, password}`, HARUS role owner |
 | POST | `/auth/refresh` | Refresh token (rotation tiap dipakai) |
 | POST | `/auth/logout` | Access token |
 | POST | `/auth/logout-all` | Access token, Owner only |
@@ -104,4 +107,6 @@ Base URL: `https://api.sonora.local/api/v1` (dev) — semua endpoint di bawah re
 | GET | `/admin/analytics/top-played`, `/admin/analytics/storage-growth` |
 | GET | `/admin/users` |
 | POST | `/admin/users/invite` (Sprint 14 sisipan, ADR 0009 — tidak kirim email, lihat catatan) |
+| POST | `/admin/users` (Sprint 14 sisipan, ADR 0012 — "Add User" kredensial: `{username, name?, password, email?}`, aktif langsung, tanpa klaim) |
 | DELETE | `/admin/users/:id` (403 kalau target Owner) |
+| GET/PATCH | `/admin/settings` (Sprint 14 sisipan, ADR 0012 — key-value: `google_oauth_enabled`, `maintenance_mode`, `app_name`, `default_language`. PATCH body `{key, value}`) |

@@ -65,6 +65,42 @@ func (h *UsersHandler) Invite(c *fiber.Ctx) error {
 	})
 }
 
+type createUserRequest struct {
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
+
+// Create is the "Add User" form (Sprint 14 sisipan, ADR 0012) —
+// credential-based Member, active immediately. Separate from Invite
+// (which stays the Google-login path, ADR 0009).
+func (h *UsersHandler) Create(c *fiber.Ctx) error {
+	var req createUserRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "invalid request body")
+	}
+	if req.Username == "" || req.Password == "" {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "username and password are required")
+	}
+	if len(req.Password) < 8 {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "password must be at least 8 characters")
+	}
+	user, err := h.service.CreateWithPassword(c.Context(), req.Username, req.Name, req.Password, req.Email)
+	if err != nil {
+		if errors.Is(err, appusers.ErrUsernameTaken) {
+			return response.Fail(c, fiber.StatusConflict, "conflict", "a user with this username already exists")
+		}
+		if errors.Is(err, appusers.ErrEmailTaken) {
+			return response.Fail(c, fiber.StatusConflict, "conflict", "a user with this email already exists")
+		}
+		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to create user")
+	}
+	return response.OK(c, fiber.StatusCreated, fiber.Map{
+		"id": user.ID, "name": user.Name, "email": user.Email, "role": user.Role, "status": "active",
+	})
+}
+
 func (h *UsersHandler) Delete(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
