@@ -231,6 +231,7 @@ func songsJSON(songs []*appcatalog.Song) []fiber.Map {
 			"title":        s.Title,
 			"duration_ms":  s.DurationMs,
 			"track_number": s.TrackNumber,
+			"artist_name":  s.ArtistName,
 		})
 	}
 	return out

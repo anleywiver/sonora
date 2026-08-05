@@ -127,6 +127,10 @@ type Song struct {
 	DurationMs  int
 	TrackNumber *int
 	AlbumID     *uuid.UUID
+	// ArtistName is only populated by ListRecent (Home's Trending widget
+	// needs it since, unlike ListSongsByAlbum/ListSongsByArtist, results
+	// aren't already scoped to one artist) — "" for other callers.
+	ArtistName string
 }
 
 func (s *Service) ListSongsByAlbum(ctx context.Context, albumID uuid.UUID) ([]*Song, error) {
@@ -250,6 +254,7 @@ func (s *Service) ListRecent(ctx context.Context, limit int32) ([]*Song, error) 
 			Title:      row.Title,
 			DurationMs: int(row.DurationMs),
 			AlbumID:    fromPgUUIDPtr(row.AlbumID),
+			ArtistName: row.ArtistName,
 		})
 	}
 	return out, nil
