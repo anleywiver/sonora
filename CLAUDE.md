@@ -161,6 +161,14 @@ DB (isi `google_id` manual) → status API benar berubah dari "invited" ke
 `GOOGLE_CLIENT_ID`/`SECRET` asli, sama seperti semua fitur Google lain di
 project ini.
 
+**Sisipan lanjutan — Login "Request Akses" via WhatsApp**: link kecil di
+Login (`wa.me` dengan `NEXT_PUBLIC_OWNER_WHATSAPP`), murni client-side —
+TIDAK ADA form registrasi/endpoint/tabel baru, sistem tetap invite-only
+sepenuhnya (lihat ADR 0009 untuk mekanisme akses yang sebenarnya).
+Diverifikasi lewat production build sungguhan (`docker build` dengan
+`--build-arg`) → jalankan container → cek HTML asli → link `wa.me`
+berisi nomor dan pesan pre-filled yang benar, bukan cuma dibaca dari kode.
+
 **Sisipan lanjutan — Admin Manage Songs** (ADR 0010): `songs.deleted_at`
 baru (migration `000010`, soft delete). Edit metadata artist/album pakai
 find-or-create yang SAMA PERSIS dengan pipeline ingest (bukan update

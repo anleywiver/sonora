@@ -15,6 +15,9 @@ COPY apps/frontend apps/frontend
 # code calling the API never re-reads process.env. Must be a build ARG.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Sprint 14 sisipan — same "must be a build ARG" reasoning as above.
+ARG NEXT_PUBLIC_OWNER_WHATSAPP=""
+ENV NEXT_PUBLIC_OWNER_WHATSAPP=$NEXT_PUBLIC_OWNER_WHATSAPP
 
 RUN corepack enable && pnpm install --frozen-lockfile
 RUN pnpm --filter @sonora/frontend build

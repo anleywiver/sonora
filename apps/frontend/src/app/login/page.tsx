@@ -1,4 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
+const OWNER_WHATSAPP = process.env.NEXT_PUBLIC_OWNER_WHATSAPP;
+const REQUEST_ACCESS_MESSAGE =
+  "Halo, saya mau minta akses ke Sonora. Apakah ada syarat tertentu?";
 
 export default function LoginPage() {
   return (
@@ -54,6 +57,21 @@ export default function LoginPage() {
           Sign in
         </button>
       </div>
+
+      {/* Sonora is invite-only — this is a contact shortcut, not a
+          self-signup mechanism. No registration form/endpoint exists or
+          should exist here; access is still granted entirely by the
+          Owner out-of-band. */}
+      {OWNER_WHATSAPP && (
+        <a
+          href={`https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent(REQUEST_ACCESS_MESSAGE)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-text-secondary underline underline-offset-2"
+        >
+          Belum punya akses? Request akses
+        </a>
+      )}
     </main>
   );
 }
