@@ -188,6 +188,21 @@ berubah; avatar bukan `data:image/` (URL biasa) → 400 ditolak; avatar
 >300KB → 400 ditolak ("terlalu besar"); GET ulang → keduanya (nama BARU
 + avatar BARU) sama-sama persisten, membuktikan update parsial benar.
 
+**Sisipan lanjutan — Browse Library** (ADR 0011): `/library` (sebelumnya
+cuma daftar playlist) sekarang punya tab internal Playlists/Songs/Albums/
+Artists — 3 tab baru pakai endpoint baru `GET /library/songs|albums|artists`
+(seluruh katalog, beda dari `/favorites` yang cuma item yang di-like).
+SENGAJA TIDAK pakai cursor pagination seperti endpoint list lain di API
+ini — cuma `LIMIT 200` + search + toggle sort (recent/alphabetical) —
+koleksi personal realistisnya ratusan item, cursor-per-mode-sort adalah
+kompleksitas nyata untuk manfaat yang tidak terasa di skala ini (lihat
+ADR 0011).
+
+Diverifikasi: ketiga endpoint baru return 200 (bukan crash) di database
+kosong maupun dengan query search+sort sekaligus — bagian riskan (CASE
+WHEN di ORDER BY untuk toggle sort) dikonfirmasi tidak error di kedua
+kondisi.
+
 **Sisipan lanjutan — Admin Manage Songs** (ADR 0010): `songs.deleted_at`
 baru (migration `000010`, soft delete). Edit metadata artist/album pakai
 find-or-create yang SAMA PERSIS dengan pipeline ingest (bukan update

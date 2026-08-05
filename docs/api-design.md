@@ -54,6 +54,7 @@ Base URL: `https://api.sonora.local/api/v1` (dev) — semua endpoint di bawah re
 | GET/POST/DELETE | `/favorites` — `{ type: song\|album\|artist\|playlist, id }` |
 | GET/POST | `/history` |
 | GET | `/library/continue-listening` |
+| GET | `/library/songs`, `/library/albums`, `/library/artists` (Sprint 14 sisipan, ADR 0011 — `?search=`, `?sort=alpha\|recent`, seluruh katalog bukan cuma favorit) |
 
 ## Player & Queue
 

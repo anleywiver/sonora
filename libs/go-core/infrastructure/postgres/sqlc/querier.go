@@ -88,6 +88,15 @@ type Querier interface {
 	ListIngestFilterRules(ctx context.Context, sourceType string) ([]IngestFilterRule, error)
 	ListIngestJobsByUser(ctx context.Context, arg ListIngestJobsByUserParams) ([]IngestJob, error)
 	ListIngestSourceConnections(ctx context.Context) ([]IngestSourceConnection, error)
+	ListLibraryAlbums(ctx context.Context, arg ListLibraryAlbumsParams) ([]ListLibraryAlbumsRow, error)
+	ListLibraryArtists(ctx context.Context, arg ListLibraryArtistsParams) ([]ListLibraryArtistsRow, error)
+	// Sprint 14 sisipan — Browse Library (docs/screens-spec.md, ADR 0011):
+	// ALL of the catalog (not just favorites), with search + a simple sort
+	// toggle. No cursor pagination here (unlike most other list endpoints in
+	// this API) — a personal-scale library is realistically hundreds of
+	// items, not enough to need keyset pagination per sort mode; a flat
+	// LIMIT is simpler and correct at this scale.
+	ListLibrarySongs(ctx context.Context, arg ListLibrarySongsParams) ([]ListLibrarySongsRow, error)
 	ListLyricsProviders(ctx context.Context) ([]LyricsProvider, error)
 	ListQueueByUser(ctx context.Context, userID pgtype.UUID) ([]QueueItem, error)
 	// Stand-in for "trending" until play_history exists (Sprint 6) to compute

@@ -287,6 +287,9 @@ func main() {
 	historyGroup.Get("", historyHandler.List)
 	historyGroup.Post("", historyHandler.Create)
 	api.Get("/library/continue-listening", requireAuth, historyHandler.ContinueListening)
+	api.Get("/library/songs", requireAuth, catalogHandler.ListLibrarySongs)
+	api.Get("/library/albums", requireAuth, catalogHandler.ListLibraryAlbums)
+	api.Get("/library/artists", requireAuth, catalogHandler.ListLibraryArtists)
 
 	queueGroup := api.Group("/queue", requireAuth)
 	queueGroup.Get("", queueHandler.List)

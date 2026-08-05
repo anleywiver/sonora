@@ -255,6 +255,85 @@ func (s *Service) ListRecent(ctx context.Context, limit int32) ([]*Song, error) 
 	return out, nil
 }
 
+const libraryBrowseLimit = 200
+
+// LibrarySong/LibraryAlbum/LibraryArtist back the Sprint 14 sisipan
+// Browse Library page (ADR 0011) — the whole catalog, not just favorites.
+
+type LibrarySong struct {
+	ID         uuid.UUID
+	Title      string
+	DurationMs int
+	ArtistName string
+	AlbumTitle string
+}
+
+func (s *Service) ListLibrarySongs(ctx context.Context, search string, sortAlpha bool) ([]*LibrarySong, error) {
+	params := sqlc.ListLibrarySongsParams{SortAlpha: sortAlpha, LimitCount: libraryBrowseLimit}
+	if search != "" {
+		params.Search = &search
+	}
+	rows, err := s.q.ListLibrarySongs(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("catalog: list library songs: %w", err)
+	}
+	out := make([]*LibrarySong, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &LibrarySong{
+			ID: fromPgUUID(row.ID), Title: row.Title, DurationMs: int(row.DurationMs),
+			ArtistName: row.ArtistName, AlbumTitle: strOrEmpty(row.AlbumTitle),
+		})
+	}
+	return out, nil
+}
+
+type LibraryAlbum struct {
+	ID         uuid.UUID
+	Title      string
+	CoverURL   string
+	ArtistName string
+}
+
+func (s *Service) ListLibraryAlbums(ctx context.Context, search string, sortAlpha bool) ([]*LibraryAlbum, error) {
+	params := sqlc.ListLibraryAlbumsParams{SortAlpha: sortAlpha, LimitCount: libraryBrowseLimit}
+	if search != "" {
+		params.Search = &search
+	}
+	rows, err := s.q.ListLibraryAlbums(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("catalog: list library albums: %w", err)
+	}
+	out := make([]*LibraryAlbum, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &LibraryAlbum{
+			ID: fromPgUUID(row.ID), Title: row.Title, CoverURL: strOrEmpty(row.CoverUrl), ArtistName: row.ArtistName,
+		})
+	}
+	return out, nil
+}
+
+type LibraryArtist struct {
+	ID       uuid.UUID
+	Name     string
+	ImageURL string
+}
+
+func (s *Service) ListLibraryArtists(ctx context.Context, search string, sortAlpha bool) ([]*LibraryArtist, error) {
+	params := sqlc.ListLibraryArtistsParams{SortAlpha: sortAlpha, LimitCount: libraryBrowseLimit}
+	if search != "" {
+		params.Search = &search
+	}
+	rows, err := s.q.ListLibraryArtists(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("catalog: list library artists: %w", err)
+	}
+	out := make([]*LibraryArtist, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &LibraryArtist{ID: fromPgUUID(row.ID), Name: row.Name, ImageURL: strOrEmpty(row.ImageUrl)})
+	}
+	return out, nil
+}
+
 // IssueStreamToken verifies the song exists, then issues a 5-minute token
 // scoped to it — used as a query param on GET /songs/:id/stream since
 // <audio> can't send a custom Authorization header (ADR 0001).

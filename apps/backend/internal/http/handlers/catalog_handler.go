@@ -97,6 +97,47 @@ func (h *CatalogHandler) ListArtistSongs(c *fiber.Ctx) error {
 	return response.OK(c, fiber.StatusOK, songsJSON(songs))
 }
 
+// ListLibrarySongs/Albums/Artists back the Sprint 14 sisipan Browse
+// Library page (ADR 0011) — ?search= and ?sort=alpha (default: recent).
+func (h *CatalogHandler) ListLibrarySongs(c *fiber.Ctx) error {
+	songs, err := h.service.ListLibrarySongs(c.Context(), c.Query("search"), c.Query("sort") == "alpha")
+	if err != nil {
+		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to list songs")
+	}
+	out := make([]fiber.Map, 0, len(songs))
+	for _, s := range songs {
+		out = append(out, fiber.Map{
+			"id": s.ID, "title": s.Title, "duration_ms": s.DurationMs,
+			"artist_name": s.ArtistName, "album_title": s.AlbumTitle,
+		})
+	}
+	return response.OK(c, fiber.StatusOK, out)
+}
+
+func (h *CatalogHandler) ListLibraryAlbums(c *fiber.Ctx) error {
+	albums, err := h.service.ListLibraryAlbums(c.Context(), c.Query("search"), c.Query("sort") == "alpha")
+	if err != nil {
+		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to list albums")
+	}
+	out := make([]fiber.Map, 0, len(albums))
+	for _, a := range albums {
+		out = append(out, fiber.Map{"id": a.ID, "title": a.Title, "cover_url": a.CoverURL, "artist_name": a.ArtistName})
+	}
+	return response.OK(c, fiber.StatusOK, out)
+}
+
+func (h *CatalogHandler) ListLibraryArtists(c *fiber.Ctx) error {
+	artists, err := h.service.ListLibraryArtists(c.Context(), c.Query("search"), c.Query("sort") == "alpha")
+	if err != nil {
+		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to list artists")
+	}
+	out := make([]fiber.Map, 0, len(artists))
+	for _, a := range artists {
+		out = append(out, fiber.Map{"id": a.ID, "name": a.Name, "image_url": a.ImageURL})
+	}
+	return response.OK(c, fiber.StatusOK, out)
+}
+
 func (h *CatalogHandler) ListGenres(c *fiber.Ctx) error {
 	genres, err := h.service.ListGenres(c.Context())
 	if err != nil {
