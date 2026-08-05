@@ -168,6 +168,10 @@ func main() {
 
 	app := fiber.New(fiber.Config{
 		AppName: "Sonora API v1",
+		// Fiber's default (4MB) silently rejects any real song upload —
+		// a 3-4 minute MP3 at typical bitrates already exceeds it. 200MB
+		// comfortably covers even long lossless tracks for /ingest/upload.
+		BodyLimit: 200 * 1024 * 1024,
 	})
 
 	app.Use(requestid.New())
