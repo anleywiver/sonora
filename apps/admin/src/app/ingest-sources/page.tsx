@@ -112,7 +112,7 @@ export default function IngestSourcesPage() {
       <div className="mt-8 space-y-3">
         <div className="flex items-center justify-between rounded-card border border-border bg-card p-4">
           <span className="font-medium">Manual Upload</span>
-          <span className="rounded-full bg-success/15 px-2.5 py-1 text-[11px] font-medium text-success">
+          <span className="rounded-full bg-success/15 px-2.5 py-1 text-[11px] font-medium capitalize text-success">
             connected
           </span>
         </div>
@@ -143,7 +143,7 @@ export default function IngestSourcesPage() {
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      "rounded-full px-2.5 py-1 text-[11px] font-medium",
+                      "rounded-full px-2.5 py-1 text-[11px] font-medium capitalize",
                       conn.is_active ? "bg-success/15 text-success" : "bg-white/5 text-text-secondary",
                     )}
                   >

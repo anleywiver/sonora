@@ -114,7 +114,9 @@ export default function SongsPage() {
                   <td className="px-4 py-3 text-text-secondary">{s.artist_name}</td>
                   <td className="px-4 py-3 text-text-secondary">{s.album_title || "—"}</td>
                   <td className="px-4 py-3 text-text-secondary">{formatDuration(s.duration_ms)}</td>
-                  <td className="px-4 py-3 text-text-secondary capitalize">{s.storage_provider}</td>
+                  <td className="px-4 py-3 text-text-secondary capitalize">
+                    {s.storage_provider.replace(/_/g, " ")}
+                  </td>
                   <td className="px-4 py-3 text-text-secondary">{s.created_at}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
