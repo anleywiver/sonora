@@ -22,13 +22,17 @@ type User struct {
 	// "invited but never logged in yet", claimed (filled in) on first
 	// real Google login. NULL rather than "" so the unique index allows
 	// any number of pending invites without colliding.
-	GoogleID  *string   `gorm:"column:google_id;uniqueIndex"`
-	Email     string    `gorm:"uniqueIndex;not null"`
-	Name      string    `gorm:"not null"`
-	AvatarURL string    `gorm:"column:avatar_url"`
-	Role      UserRole  `gorm:"not null;default:member"`
-	CreatedAt time.Time `gorm:"not null;default:now()"`
-	UpdatedAt time.Time `gorm:"not null;default:now()"`
+	GoogleID  *string  `gorm:"column:google_id;uniqueIndex"`
+	Email     string   `gorm:"uniqueIndex;not null"`
+	Name      string   `gorm:"not null"`
+	AvatarURL string   `gorm:"column:avatar_url"`
+	Role      UserRole `gorm:"not null;default:member"`
+	// Username/PasswordHash back credential-based login (Sprint 14
+	// sisipan, ADR 0012) — nullable, a Google-only user never has these.
+	Username     *string   `gorm:"column:username;uniqueIndex"`
+	PasswordHash *string   `gorm:"column:password_hash"`
+	CreatedAt    time.Time `gorm:"not null;default:now()"`
+	UpdatedAt    time.Time `gorm:"not null;default:now()"`
 }
 
 func (User) TableName() string { return "users" }
@@ -67,3 +71,15 @@ type RefreshToken struct {
 }
 
 func (RefreshToken) TableName() string { return "refresh_tokens" }
+
+// AppSetting is a generic key-value store (Sprint 14 sisipan, ADR 0012)
+// backing both the Google OAuth runtime toggle and the Admin Settings
+// page (app name, language, maintenance mode). Values are stored as
+// plain text — callers parse booleans themselves ("true"/"false").
+type AppSetting struct {
+	Key       string    `gorm:"column:key;primaryKey"`
+	Value     string    `gorm:"column:value;not null"`
+	UpdatedAt time.Time `gorm:"column:updated_at;not null;default:now()"`
+}
+
+func (AppSetting) TableName() string { return "app_settings" }

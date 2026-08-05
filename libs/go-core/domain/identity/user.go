@@ -25,8 +25,13 @@ type User struct {
 	Name      string
 	AvatarURL string
 	Role      Role
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	// Username/PasswordHash back credential-based login (Sprint 14
+	// sisipan, ADR 0012) — both "" for a Google-only user. Never both
+	// empty AND GoogleID empty (a user must have at least one way in).
+	Username     string
+	PasswordHash string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (u User) IsOwner() bool { return u.Role == RoleOwner }
@@ -43,6 +48,8 @@ type UserRepository interface {
 	// 0009) — returns ErrNotFound if no user (pending or active) has this
 	// email.
 	FindByEmail(ctx context.Context, email string) (*User, error)
+	// FindByUsername supports credential-based Member login (ADR 0012).
+	FindByUsername(ctx context.Context, username string) (*User, error)
 	Create(ctx context.Context, user *User) error
 	// ClaimInvite fills in a pending invite's google_id/name/avatar_url on
 	// first real login — id/email/role are left untouched.

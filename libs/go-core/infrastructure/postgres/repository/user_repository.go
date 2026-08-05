@@ -55,14 +55,28 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*identi
 	return &user, nil
 }
 
+func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*identity.User, error) {
+	var row models.User
+	if err := r.db.WithContext(ctx).First(&row, "username = ?", username).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, identity.ErrNotFound
+		}
+		return nil, err
+	}
+	user := userFromModel(row)
+	return &user, nil
+}
+
 func (r *UserRepository) Create(ctx context.Context, user *identity.User) error {
 	row := models.User{
-		ID:        user.ID,
-		GoogleID:  strPtrOrNil(user.GoogleID),
-		Email:     user.Email,
-		Name:      user.Name,
-		AvatarURL: user.AvatarURL,
-		Role:      models.UserRole(user.Role),
+		ID:           user.ID,
+		GoogleID:     strPtrOrNil(user.GoogleID),
+		Email:        user.Email,
+		Name:         user.Name,
+		AvatarURL:    user.AvatarURL,
+		Role:         models.UserRole(user.Role),
+		Username:     strPtrOrNil(user.Username),
+		PasswordHash: strPtrOrNil(user.PasswordHash),
 	}
 	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return err
@@ -140,14 +154,24 @@ func userFromModel(row models.User) identity.User {
 	if row.GoogleID != nil {
 		googleID = *row.GoogleID
 	}
+	username := ""
+	if row.Username != nil {
+		username = *row.Username
+	}
+	passwordHash := ""
+	if row.PasswordHash != nil {
+		passwordHash = *row.PasswordHash
+	}
 	return identity.User{
-		ID:        row.ID,
-		GoogleID:  googleID,
-		Email:     row.Email,
-		Name:      row.Name,
-		AvatarURL: row.AvatarURL,
-		Role:      identity.Role(row.Role),
-		CreatedAt: row.CreatedAt,
-		UpdatedAt: row.UpdatedAt,
+		ID:           row.ID,
+		GoogleID:     googleID,
+		Email:        row.Email,
+		Name:         row.Name,
+		AvatarURL:    row.AvatarURL,
+		Role:         identity.Role(row.Role),
+		Username:     username,
+		PasswordHash: passwordHash,
+		CreatedAt:    row.CreatedAt,
+		UpdatedAt:    row.UpdatedAt,
 	}
 }
