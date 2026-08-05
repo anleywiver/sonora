@@ -110,8 +110,14 @@ export default function AlbumDetailPage() {
   const year = album.released_at ? new Date(album.released_at).getFullYear() : null;
 
   return (
-    <main className="min-h-screen px-6 pb-32 pt-10">
-      <div className="mx-auto h-56 w-56 rounded-2xl bg-gradient-to-br from-accent to-primary" aria-hidden />
+    <main className="relative min-h-screen overflow-hidden px-6 pb-32 pt-10">
+      {/* Hero gradient (screens-spec #13) — see song/[id]/page.tsx for why
+          this is a fixed tint rather than per-cover color extraction. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-gradient-to-b from-primary/25 to-transparent"
+        aria-hidden
+      />
+      <div className="relative mx-auto h-56 w-56 rounded-2xl bg-gradient-to-br from-accent to-primary" aria-hidden />
       <div className="mt-6 text-center">
         <h1 className="text-xl font-bold">{album.title}</h1>
         <Link

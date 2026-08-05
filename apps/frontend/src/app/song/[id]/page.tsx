@@ -151,9 +151,17 @@ export default function SongDetailPage() {
   };
 
   return (
-    <main className="min-h-screen px-6 pb-32 pt-10">
+    <main className="relative min-h-screen overflow-hidden px-6 pb-32 pt-10">
+      {/* Hero gradient (screens-spec #6) — fixed blue tint rather than
+          per-image color extraction, same fallback approach Now Playing
+          already uses (design-system.md), since artwork today is a
+          placeholder gradient anyway, not a real cover image. */}
       <div
-        className="mx-auto h-56 w-56 rounded-2xl bg-gradient-to-br from-accent to-primary"
+        className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-gradient-to-b from-primary/25 to-transparent"
+        aria-hidden
+      />
+      <div
+        className="relative mx-auto h-56 w-56 rounded-2xl bg-gradient-to-br from-accent to-primary"
         aria-hidden
       />
       <div className="mt-6 text-center">
