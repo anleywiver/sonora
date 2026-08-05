@@ -169,6 +169,25 @@ Diverifikasi lewat production build sungguhan (`docker build` dengan
 `--build-arg`) → jalankan container → cek HTML asli → link `wa.me`
 berisi nomor dan pesan pre-filled yang benar, bukan cuma dibaca dari kode.
 
+**Sisipan lanjutan — Profile page + `PUT /auth/me`** (ADR 0009, revisi):
+rencana awal (avatar upload lewat storage pool Drive) diganti setelah
+disadari butuh Drive `permissions.create` (public) ATAU proxy endpoint
+baru dengan pola scoped-token yang sama seperti stream-token lagu
+(`<img>` juga tidak bisa kirim Authorization header, sama seperti
+`<audio>` — ADR 0001) — infrastruktur yang terlalu besar untuk foto
+profil di aplikasi personal. Keputusan akhir: client resize ke thumbnail
+kecil (128px, canvas browser) → kirim sebagai `data:image/...` URL
+langsung di body `PUT /auth/me`, disimpan apa adanya di `avatar_url`
+(kolom TEXT yang sudah ada) — `<img src>` render data URL secara native,
+tanpa proxy/token apapun. Update nama TIDAK menghapus avatar yang sudah
+ada (dan sebaliknya) — keduanya independen.
+
+Diverifikasi nyata: update nama saja → avatar tidak ikut ter-hapus;
+update avatar dengan `data:image/...` valid → tersimpan, nama tidak
+berubah; avatar bukan `data:image/` (URL biasa) → 400 ditolak; avatar
+>300KB → 400 ditolak ("terlalu besar"); GET ulang → keduanya (nama BARU
++ avatar BARU) sama-sama persisten, membuktikan update parsial benar.
+
 **Sisipan lanjutan — Admin Manage Songs** (ADR 0010): `songs.deleted_at`
 baru (migration `000010`, soft delete). Edit metadata artist/album pakai
 find-or-create yang SAMA PERSIS dengan pipeline ingest (bukan update

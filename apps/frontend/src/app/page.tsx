@@ -6,6 +6,10 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { usePlayerStore } from "@/store/player";
 
+interface Me {
+  avatar_url: string;
+}
+
 interface ContinueListeningItem {
   song_id: string;
   title: string;
@@ -24,6 +28,7 @@ interface TrendingItem {
 export default function HomePage() {
   const [continueListening, setContinueListening] = useState<ContinueListeningItem[]>([]);
   const [trending, setTrending] = useState<TrendingItem[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
   const play = usePlayerStore((s) => s.play);
 
   useEffect(() => {
@@ -33,11 +38,22 @@ export default function HomePage() {
     apiFetch<TrendingItem[]>("/search/trending")
       .then(setTrending)
       .catch(() => {});
+    apiFetch<Me>("/auth/me")
+      .then(setMe)
+      .catch(() => {});
   }, []);
 
   return (
     <main className="min-h-screen px-4 pb-32 pt-6">
-      <h1 className="text-xl font-bold">Halo 👋</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Halo 👋</h1>
+        <Link href="/profile" aria-label="Profile" className="h-9 w-9 overflow-hidden rounded-full bg-gradient-to-br from-accent to-primary">
+          {me?.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={me.avatar_url} alt="" className="h-full w-full object-cover" />
+          ) : null}
+        </Link>
+      </div>
 
       {continueListening.length > 0 && (
         <section className="mt-6">

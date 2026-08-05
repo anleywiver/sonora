@@ -20,6 +20,7 @@ Base URL: `https://api.sonora.local/api/v1` (dev) — semua endpoint di bawah re
 | POST | `/auth/logout` | Access token |
 | POST | `/auth/logout-all` | Access token, Owner only |
 | GET | `/auth/me` | Access token |
+| PUT | `/auth/me` | Access token — Sprint 14 sisipan, ADR 0009. Body `{name?, avatar_url?}`; `avatar_url` harus `data:image/...` (thumbnail kecil, bukan link Drive — lihat ADR) |
 | GET | `/devices` | Access token |
 | DELETE | `/devices/:id` | Access token |
 

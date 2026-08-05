@@ -207,6 +207,26 @@ func (s *Service) Me(ctx context.Context, userID uuid.UUID) (*identity.User, err
 	return s.users.FindByID(ctx, userID)
 }
 
+// UpdateMe edits the caller's own profile (Sprint 14 sisipan, ADR 0009).
+// name/avatarURL are only changed when non-empty — a caller updating just
+// the name shouldn't accidentally blank out the avatar.
+func (s *Service) UpdateMe(ctx context.Context, userID uuid.UUID, name, avatarURL string) (*identity.User, error) {
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if name != "" {
+		user.Name = name
+	}
+	if avatarURL != "" {
+		user.AvatarURL = avatarURL
+	}
+	if err := s.users.Update(ctx, user); err != nil {
+		return nil, fmt.Errorf("auth: update profile: %w", err)
+	}
+	return user, nil
+}
+
 func (s *Service) ListDevices(ctx context.Context, userID uuid.UUID) ([]*identity.Device, error) {
 	return s.devices.ListByUser(ctx, userID)
 }

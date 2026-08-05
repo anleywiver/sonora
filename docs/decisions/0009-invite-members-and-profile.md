@@ -56,9 +56,19 @@ single-owner personal deployment.
 - **WhatsApp request-access link**: murni link `wa.me` client-side, TIDAK
   ada endpoint/tabel baru — sesuai instruksi eksplisit user (tetap
   invite-only, ini cuma shortcut kontak).
-- **Profile**: `PUT /auth/me` baru (update `name`/`avatar_url`), avatar
-  upload pakai jalur storage yang sama dengan ingest (checksum + upload
-  ke storage account aktif) — bukan jalur baru.
+- **Profile**: `PUT /auth/me` baru (update `name`/`avatar_url`). Avatar
+  upload TERNYATA tidak pakai storage pool Drive (rencana awal) — Drive
+  API butuh file itu dibuat publicly-readable (`permissions.create`) atau
+  proxy endpoint baru dengan pola scoped-token yang sama seperti
+  stream-token lagu (karena `<img>` juga tidak bisa kirim Authorization
+  header, sama seperti `<audio>` — ADR 0001), infrastruktur baru yang
+  terlalu besar untuk sekadar foto profil di aplikasi personal. Keputusan
+  akhir: client resize gambar ke thumbnail kecil (≤128px) lalu kirim
+  sebagai data URL langsung di body `PUT /auth/me`, disimpan apa adanya
+  di kolom `avatar_url` (TEXT, sudah cukup besar) — `<img src>` render
+  data URL secara native tanpa perlu proxy/token apapun. Avatar dari
+  Google OAuth (`profile.Picture`, URL asli Google) tetap jadi default
+  kalau user tidak pernah upload foto sendiri.
 - **Browse Library**: 3 endpoint baru (`GET /library/songs`,
   `/library/albums`, `/library/artists`) — beda dari `/favorites` (yang
   cuma nunjukin item yang di-like): ini nunjukin SEMUA koleksi (semua

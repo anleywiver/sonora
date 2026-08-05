@@ -210,6 +210,7 @@ func main() {
 	authGroup.Post("/logout", requireAuth, authHandler.Logout)
 	authGroup.Post("/logout-all", requireAuth, requireOwner, authHandler.LogoutAll)
 	authGroup.Get("/me", requireAuth, authHandler.Me)
+	authGroup.Put("/me", requireAuth, authHandler.UpdateMe)
 
 	api.Get("/devices", requireAuth, deviceHandler.List)
 	api.Delete("/devices/:id", requireAuth, deviceHandler.Delete)

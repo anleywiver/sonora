@@ -175,6 +175,44 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 	return response.OK(c, fiber.StatusOK, userJSON(user))
 }
 
+// maxAvatarDataURLLen caps the profile page's "change photo" upload
+// (Sprint 14 sisipan, ADR 0009) — the client resizes to a small
+// thumbnail before sending, so a real thumbnail is always well under
+// this; it just guards against something huge landing in the DB.
+const maxAvatarDataURLLen = 300_000
+
+type updateMeRequest struct {
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+// UpdateMe edits the caller's own name/avatar (Sprint 14 sisipan).
+// avatar_url is expected to be a small data: URL (see ADR 0009 for why
+// this doesn't go through the Drive storage pool) — not validated as a
+// real image beyond a size cap and a data:image/ prefix check.
+func (h *AuthHandler) UpdateMe(c *fiber.Ctx) error {
+	var req updateMeRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "invalid request body")
+	}
+	if req.AvatarURL != "" {
+		if len(req.AvatarURL) > maxAvatarDataURLLen {
+			return response.Fail(c, fiber.StatusBadRequest, "validation_error", "avatar image is too large")
+		}
+		if !strings.HasPrefix(req.AvatarURL, "data:image/") {
+			return response.Fail(c, fiber.StatusBadRequest, "validation_error", "avatar_url must be a data:image/... URL")
+		}
+	}
+	user, err := h.service.UpdateMe(c.Context(), middleware.UserID(c), req.Name, req.AvatarURL)
+	if err != nil {
+		if errors.Is(err, identity.ErrNotFound) {
+			return response.Fail(c, fiber.StatusNotFound, "not_found", "user not found")
+		}
+		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to update profile")
+	}
+	return response.OK(c, fiber.StatusOK, userJSON(user))
+}
+
 func (h *AuthHandler) setRefreshCookie(c *fiber.Ctx, value string, expiresAt time.Time) {
 	c.Cookie(&fiber.Cookie{
 		Name:     refreshCookieName,
