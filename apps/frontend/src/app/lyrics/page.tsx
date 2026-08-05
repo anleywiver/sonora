@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MicOff, Play } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
 import { activeLineIndex, parseLRC, type LyricLine } from "@/lib/lrc";
 import { cn } from "@/lib/utils";
@@ -55,19 +56,21 @@ export default function LyricsPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col px-6 pb-10 pt-6">
+    <main className="flex min-h-screen flex-col bg-gradient-to-b from-card to-background px-6 pb-6 pt-6">
       <div className="flex items-center justify-between">
         <button onClick={() => router.back()} aria-label="Back">
-          <ChevronDown size={28} />
+          <ChevronDown size={22} />
         </button>
-        <div className="text-center">
-          <p className="text-sm font-medium">{currentSong.title}</p>
-          <p className="text-xs text-text-secondary">{currentSong.artistName}</p>
+        <div className="flex items-center gap-1.5">
+          <div className="h-[22px] w-[22px] flex-shrink-0 rounded-md bg-gradient-to-br from-hover to-primary" />
+          <span className="text-[10px] font-semibold text-white/70">{currentSong.title}</span>
         </div>
-        <div className="w-7" aria-hidden />
+        <div className="w-[18px]" aria-hidden />
       </div>
 
-      {error && <p className="mt-10 text-center text-sm text-error">{error}</p>}
+      {error && (
+        <EmptyState icon={MicOff} message="Lirik tidak tersedia untuk lagu ini." />
+      )}
 
       {lines && (
         <div className="mt-8 flex-1 space-y-4 overflow-y-auto text-center">
@@ -98,9 +101,15 @@ export default function LyricsPage() {
         </p>
       )}
 
-      <p className="mt-6 text-center text-xs text-text-secondary">
-        Tap baris untuk lompat ke bagian itu
-      </p>
+      {(lines || plainText) && (
+        <div className="mt-3.5 flex items-center justify-between border-t border-white/[0.08] pt-3.5">
+          <span className="text-[10px] text-white/50">Tap baris untuk lompat ke bagian itu</span>
+          <div className="flex items-center gap-1.5">
+            <Play size={14} className="text-white" />
+            <span className="text-[10px] text-white/50">Auto-scroll</span>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
