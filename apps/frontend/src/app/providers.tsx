@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { apiFetch, ApiError } from "@/lib/api";
+import { SplashScreen } from "@/components/splash-screen";
 import { useAuthStore } from "@/store/auth";
 import { useWSStore } from "@/store/ws";
 
@@ -67,7 +68,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (!ready) {
-    return null;
+    return <SplashScreen />;
   }
 
   return <>{children}</>;

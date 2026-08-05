@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"sonora.dev/go-core/application/ingestfilter"
 	"sonora.dev/go-core/infrastructure/crypto"
 	"sonora.dev/go-core/infrastructure/mediainfo"
 	"sonora.dev/go-core/infrastructure/meilisearch"
@@ -30,6 +31,7 @@ type Service struct {
 	box                *crypto.Box
 	search             *meilisearch.Client
 	musicbrainz        *musicbrainz.Client
+	filters            *ingestfilter.Service
 	googleClientID     string
 	googleClientSecret string
 }
@@ -40,6 +42,7 @@ func NewService(q *sqlc.Queries, box *crypto.Box, search *meilisearch.Client, go
 		box:                box,
 		search:             search,
 		musicbrainz:        musicbrainz.NewClient(),
+		filters:            ingestfilter.NewService(q),
 		googleClientID:     googleClientID,
 		googleClientSecret: googleClientSecret,
 	}
@@ -152,14 +155,71 @@ func (s *Service) RetryJob(ctx context.Context, jobID, userID uuid.UUID) (*Job, 
 	if fromPgUUID(row.UserID) != userID {
 		return nil, ErrNotFound
 	}
+	return s.retry(ctx, row)
+}
+
+// RetryJobAdmin is RetryJob without the ownership check — the admin Job
+// Queue page (Sprint 14, docs/screens-spec.md #20) can retry any user's
+// failed job, not just the caller's own.
+func (s *Service) RetryJobAdmin(ctx context.Context, jobID uuid.UUID) (*Job, error) {
+	row, err := s.q.GetIngestJobByID(ctx, toPgUUID(jobID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("ingest: get job: %w", err)
+	}
+	return s.retry(ctx, row)
+}
+
+func (s *Service) retry(ctx context.Context, row sqlc.IngestJob) (*Job, error) {
 	if row.Status != "failed" || row.TempPath == nil {
 		return nil, ErrNotRetryable
 	}
-	if err := s.q.ResetIngestJobToPending(ctx, toPgUUID(jobID)); err != nil {
+	if err := s.q.ResetIngestJobToPending(ctx, row.ID); err != nil {
 		return nil, fmt.Errorf("ingest: reset job: %w", err)
 	}
 	row.Status = "pending"
 	return jobFromRow(row), nil
+}
+
+// ListAllJobs is ListJobs without the per-user scope — the admin Job
+// Queue page (Sprint 14).
+func (s *Service) ListAllJobs(ctx context.Context, status, cursor string, limit int32) ([]*Job, string, bool, error) {
+	params := sqlc.ListAllIngestJobsParams{LimitCount: limit + 1}
+	if status != "" {
+		params.Status = &status
+	}
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", false, err
+		}
+		params.CursorCreatedAt = pgtype.Timestamptz{Time: createdAt, Valid: true}
+		params.CursorID = toPgUUID(id)
+	}
+
+	rows, err := s.q.ListAllIngestJobs(ctx, params)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("ingest: list all jobs: %w", err)
+	}
+
+	hasMore := len(rows) > int(limit)
+	if hasMore {
+		rows = rows[:limit]
+	}
+
+	jobs := make([]*Job, 0, len(rows))
+	for _, row := range rows {
+		jobs = append(jobs, jobFromRow(row))
+	}
+
+	nextCursor := ""
+	if hasMore && len(jobs) > 0 {
+		last := jobs[len(jobs)-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+	}
+	return jobs, nextCursor, hasMore, nil
 }
 
 func (s *Service) DeleteJob(ctx context.Context, jobID, userID uuid.UUID) error {
@@ -228,6 +288,27 @@ func (s *Service) Process(ctx context.Context, jobID uuid.UUID) error {
 	info, err := mediainfo.Probe(ctx, tempPath)
 	if err != nil {
 		return fail(fmt.Errorf("ingest: probe media: %w", err))
+	}
+
+	// Filter rules (Sprint 14 sisipan, ADR 0008) apply ONLY to auto-ingest
+	// sources — manual_upload is never filtered, per CLAUDE.md's
+	// legal-ingest constraint (the user can always upload anything
+	// themselves). Checked here, right after the only point genre/year
+	// become available (ID3 tags), and before the expensive steps
+	// (storage upload, waveform, MusicBrainz) — see ADR 0008 for why it
+	// can't be checked any earlier than this.
+	if row.SourceType == "bandcamp" || row.SourceType == "cloud_sync" {
+		pass, reason, err := s.filters.Check(ctx, row.SourceType, info.Genre, info.Year)
+		if err != nil {
+			return fail(fmt.Errorf("ingest: check filter rules: %w", err))
+		}
+		if !pass {
+			if err := s.q.SkipIngestJobByFilter(ctx, sqlc.SkipIngestJobByFilterParams{ID: toPgUUID(jobID), ErrorMessage: &reason}); err != nil {
+				return fmt.Errorf("ingest: mark job skipped: %w", err)
+			}
+			_ = os.Remove(tempPath)
+			return nil
+		}
 	}
 
 	stat, err := os.Stat(tempPath)

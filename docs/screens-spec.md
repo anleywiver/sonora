@@ -46,6 +46,8 @@ Semua halaman **mobile-first**, dark mode only.
 
 **18. Ingest Sources** (dulu "Crawler") — List provider aktif (Manual Upload, Bandcamp, Cloud Sync) dengan status connected/disconnected, BUKAN form keyword/auto-download.
 
+> *Catatan Sprint 14 sisipan (ADR 0008)*: tambah panel "Filter Rules" per source (Bandcamp, Cloud Sync) — genre allow-list (chip, tambah/hapus) dan year range (min/max). Filter ini **HANYA berlaku untuk auto-ingest** (Bandcamp/cloud sync), **TIDAK PERNAH** untuk Manual Upload — dijelaskan eksplisit di UI, bukan cuma diasumsikan.
+
 **19. Lyrics Source** — Table provider dengan drag-handle untuk reorder priority, kolom Health (Online/Rate limited), kolom Match Rate.
 
 **20. Job Queue** — Table dense (Job, Type, Status badge, Action) untuk `ingest_jobs`, tombol Retry untuk yang failed.

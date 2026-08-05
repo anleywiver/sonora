@@ -1,0 +1,85 @@
+# Phase 2 of the SSL bootstrap (infrastructure/nginx/README.md) — active
+# once certs exist under /etc/letsencrypt for all three domains. Until
+# then, bootstrap.conf.template is what's mounted instead.
+#
+# Subdomain routing (matches FRONTEND_URL/ADMIN_URL's existing pattern —
+# see libs/go-core/config/config.go): ${FRONTEND_DOMAIN} -> frontend:3000,
+# ${ADMIN_DOMAIN} -> admin:3001, ${API_DOMAIN} -> api:8080.
+
+server {
+    listen 80;
+    server_name ${FRONTEND_DOMAIN} ${ADMIN_DOMAIN} ${API_DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${FRONTEND_DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${FRONTEND_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${FRONTEND_DOMAIN}/privkey.pem;
+
+    location / {
+        proxy_pass http://frontend:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${ADMIN_DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${ADMIN_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${ADMIN_DOMAIN}/privkey.pem;
+
+    location / {
+        proxy_pass http://admin:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${API_DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${API_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${API_DOMAIN}/privkey.pem;
+
+    # WebSocket (GET /ws) and the audio stream endpoint both need this
+    # raised timeout / no buffering — same reasoning as any reverse proxy
+    # in front of a long-lived connection or a large streamed response.
+    proxy_read_timeout 3600s;
+
+    location /ws {
+        proxy_pass http://api:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        proxy_pass http://api:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+    }
+}

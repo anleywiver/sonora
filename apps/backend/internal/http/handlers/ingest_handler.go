@@ -151,6 +151,52 @@ func (h *IngestHandler) List(c *fiber.Ctx) error {
 	})
 }
 
+// AdminList is List without the per-user scope — the admin Job Queue page
+// (Sprint 14, docs/screens-spec.md #20).
+func (h *IngestHandler) AdminList(c *fiber.Ctx) error {
+	status := c.Query("status")
+	cursor := c.Query("cursor")
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 100 {
+			limit = n
+		}
+	}
+
+	jobs, nextCursor, hasMore, err := h.service.ListAllJobs(c.Context(), status, cursor, int32(limit))
+	if err != nil {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "invalid cursor")
+	}
+
+	out := make([]fiber.Map, 0, len(jobs))
+	for _, job := range jobs {
+		row := jobJSON(job)
+		row["user_id"] = job.UserID
+		out = append(out, row)
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data":        out,
+		"next_cursor": nextCursor,
+		"has_more":    hasMore,
+	})
+}
+
+// AdminRetry is Retry without the ownership check.
+func (h *IngestHandler) AdminRetry(c *fiber.Ctx) error {
+	jobID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "invalid job id")
+	}
+	job, err := h.service.RetryJobAdmin(c.Context(), jobID)
+	if err != nil {
+		return h.jobError(c, err)
+	}
+	if err := h.enqueue(job.ID); err != nil {
+		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to queue retry")
+	}
+	return response.OK(c, fiber.StatusOK, jobJSON(job))
+}
+
 func (h *IngestHandler) Get(c *fiber.Ctx) error {
 	jobID, err := uuid.Parse(c.Params("id"))
 	if err != nil {

@@ -77,6 +77,60 @@ services:
       redis:
         condition: service_healthy
 
+  # Sprint 14: production Next.js servers behind Nginx (infrastructure/nginx).
+  # NEXT_PUBLIC_API_URL is a build arg, not a runtime env var — see
+  # infrastructure/docker/frontend.Dockerfile's comment for why.
+  frontend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/frontend.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  admin:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/admin.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+    depends_on:
+      - api
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Which template is mounted here is a deployment choice — see
+      # infrastructure/nginx/README.md (bootstrap vs full SSL config).
+      - ./infrastructure/nginx/templates-active:/etc/nginx/templates:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    depends_on:
+      - frontend
+      - admin
+      - api
+
+  # Bootstrap/renew Let's Encrypt certs — see infrastructure/nginx/README.md.
+  # Not started by default (`docker compose up`) since it needs real
+  # domains pointed at this VPS first; run explicitly with
+  # `docker compose run --rm certbot ...` per that README.
+  certbot:
+    image: certbot/certbot
+    profiles: ["ssl-setup"]
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+
 volumes:
   postgres_data:
   redis_data:
@@ -84,3 +138,5 @@ volumes:
   # Shared between api (writes uploads) and worker (reads them for the
   # ingest pipeline) — see Sprint 3 / ADR 0002.
   ingest_tmp:
+  certbot_www:
+  certbot_certs:

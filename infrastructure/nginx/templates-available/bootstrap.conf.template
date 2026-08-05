@@ -1,0 +1,17 @@
+# Phase 1 of the SSL bootstrap (infrastructure/nginx/README.md): plain
+# HTTP only, just enough to serve the ACME HTTP-01 challenge certbot needs
+# before any certificate exists. Swap to sonora.conf.template once certs
+# are issued — see the README for the exact steps.
+server {
+    listen 80;
+    server_name ${FRONTEND_DOMAIN} ${ADMIN_DOMAIN} ${API_DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 200 "Sonora is bootstrapping SSL — see infrastructure/nginx/README.md\n";
+        add_header Content-Type text/plain;
+    }
+}

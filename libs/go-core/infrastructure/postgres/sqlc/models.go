@@ -52,6 +52,14 @@ type Genre struct {
 	Name string      `json:"name"`
 }
 
+type IngestFilterRule struct {
+	ID         pgtype.UUID        `json:"id"`
+	SourceType string             `json:"source_type"`
+	RuleType   string             `json:"rule_type"`
+	Value      string             `json:"value"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type IngestJob struct {
 	ID           pgtype.UUID        `json:"id"`
 	UserID       pgtype.UUID        `json:"user_id"`
@@ -86,13 +94,16 @@ type Lyric struct {
 }
 
 type LyricsProvider struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	BaseUrl   string             `json:"base_url"`
-	IsEnabled bool               `json:"is_enabled"`
-	Priority  int32              `json:"priority"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID                pgtype.UUID        `json:"id"`
+	Name              string             `json:"name"`
+	BaseUrl           string             `json:"base_url"`
+	IsEnabled         bool               `json:"is_enabled"`
+	Priority          int32              `json:"priority"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	HealthStatus      string             `json:"health_status"`
+	TotalLookups      int64              `json:"total_lookups"`
+	SuccessfulMatches int64              `json:"successful_matches"`
 }
 
 type PlayHistory struct {

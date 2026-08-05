@@ -13,6 +13,12 @@ import (
 
 var ErrNotFound = fmt.Errorf("lyrics: not found")
 
+// ErrRateLimited distinguishes a 429 from LRCLIB from a genuine "no
+// lyrics for this track" 404 — the admin Lyrics Source page (Sprint 14)
+// shows this as a distinct "rate_limited" health state, not just another
+// miss.
+var ErrRateLimited = fmt.Errorf("lyrics: rate limited by lrclib")
+
 type Result struct {
 	PlainLyrics  string
 	SyncedLyrics string
@@ -54,6 +60,9 @@ func (c *LRCLIBClient) Fetch(ctx context.Context, trackName, artistName string, 
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrNotFound
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, ErrRateLimited
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("lyrics: lrclib status %d", resp.StatusCode)

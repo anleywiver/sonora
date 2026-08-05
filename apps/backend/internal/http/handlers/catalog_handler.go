@@ -85,6 +85,18 @@ func (h *CatalogHandler) ListArtistAlbums(c *fiber.Ctx) error {
 	return response.OK(c, fiber.StatusOK, out)
 }
 
+func (h *CatalogHandler) ListArtistSongs(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Fail(c, fiber.StatusBadRequest, "validation_error", "invalid artist id")
+	}
+	songs, err := h.service.ListSongsByArtist(c.Context(), id)
+	if err != nil {
+		return response.Fail(c, fiber.StatusInternalServerError, "internal_error", "failed to load artist songs")
+	}
+	return response.OK(c, fiber.StatusOK, songsJSON(songs))
+}
+
 func (h *CatalogHandler) ListGenres(c *fiber.Ctx) error {
 	genres, err := h.service.ListGenres(c.Context())
 	if err != nil {
@@ -184,11 +196,17 @@ func songsJSON(songs []*appcatalog.Song) []fiber.Map {
 }
 
 func albumJSON(a *appcatalog.AlbumDetail) fiber.Map {
+	var releasedAt *string
+	if a.ReleasedAt != nil {
+		formatted := a.ReleasedAt.Format("2006-01-02")
+		releasedAt = &formatted
+	}
 	return fiber.Map{
 		"id":          a.ID,
 		"title":       a.Title,
 		"cover_url":   a.CoverURL,
 		"artist_id":   a.ArtistID,
 		"artist_name": a.ArtistName,
+		"released_at": releasedAt,
 	}
 }

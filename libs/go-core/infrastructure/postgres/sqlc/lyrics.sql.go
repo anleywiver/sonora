@@ -48,7 +48,7 @@ func (q *Queries) CreateLyrics(ctx context.Context, arg CreateLyricsParams) (Lyr
 const createLyricsProvider = `-- name: CreateLyricsProvider :one
 INSERT INTO lyrics_providers (id, name, base_url)
 VALUES ($1, $2, $3)
-RETURNING id, name, base_url, is_enabled, priority, created_at, updated_at
+RETURNING id, name, base_url, is_enabled, priority, created_at, updated_at, health_status, total_lookups, successful_matches
 `
 
 type CreateLyricsProviderParams struct {
@@ -68,6 +68,9 @@ func (q *Queries) CreateLyricsProvider(ctx context.Context, arg CreateLyricsProv
 		&i.Priority,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.HealthStatus,
+		&i.TotalLookups,
+		&i.SuccessfulMatches,
 	)
 	return i, err
 }
@@ -91,7 +94,7 @@ func (q *Queries) GetLyricsBySongID(ctx context.Context, songID pgtype.UUID) (Ly
 }
 
 const getLyricsProviderByName = `-- name: GetLyricsProviderByName :one
-SELECT id, name, base_url, is_enabled, priority, created_at, updated_at FROM lyrics_providers WHERE name = $1
+SELECT id, name, base_url, is_enabled, priority, created_at, updated_at, health_status, total_lookups, successful_matches FROM lyrics_providers WHERE name = $1
 `
 
 func (q *Queries) GetLyricsProviderByName(ctx context.Context, name string) (LyricsProvider, error) {
@@ -105,6 +108,108 @@ func (q *Queries) GetLyricsProviderByName(ctx context.Context, name string) (Lyr
 		&i.Priority,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.HealthStatus,
+		&i.TotalLookups,
+		&i.SuccessfulMatches,
 	)
 	return i, err
+}
+
+const listLyricsProviders = `-- name: ListLyricsProviders :many
+SELECT id, name, base_url, is_enabled, priority, created_at, updated_at, health_status, total_lookups, successful_matches FROM lyrics_providers ORDER BY priority ASC, name ASC
+`
+
+func (q *Queries) ListLyricsProviders(ctx context.Context) ([]LyricsProvider, error) {
+	rows, err := q.db.Query(ctx, listLyricsProviders)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LyricsProvider
+	for rows.Next() {
+		var i LyricsProvider
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.BaseUrl,
+			&i.IsEnabled,
+			&i.Priority,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.HealthStatus,
+			&i.TotalLookups,
+			&i.SuccessfulMatches,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recordLyricsLookup = `-- name: RecordLyricsLookup :exec
+UPDATE lyrics_providers SET
+  total_lookups = total_lookups + 1,
+  successful_matches = successful_matches + (CASE WHEN $2::bool THEN 1 ELSE 0 END),
+  updated_at = now()
+WHERE id = $1
+`
+
+type RecordLyricsLookupParams struct {
+	ID      pgtype.UUID `json:"id"`
+	Matched bool        `json:"matched"`
+}
+
+// Sprint 14: every GetLyrics attempt for a provider increments
+// total_lookups; matched only increments successful_matches too — this is
+// what makes "Match Rate" on the admin Lyrics Source page real instead of
+// fabricated (a miss previously left no trace at all).
+func (q *Queries) RecordLyricsLookup(ctx context.Context, arg RecordLyricsLookupParams) error {
+	_, err := q.db.Exec(ctx, recordLyricsLookup, arg.ID, arg.Matched)
+	return err
+}
+
+const setLyricsProviderEnabled = `-- name: SetLyricsProviderEnabled :exec
+UPDATE lyrics_providers SET is_enabled = $2, updated_at = now() WHERE id = $1
+`
+
+type SetLyricsProviderEnabledParams struct {
+	ID        pgtype.UUID `json:"id"`
+	IsEnabled bool        `json:"is_enabled"`
+}
+
+func (q *Queries) SetLyricsProviderEnabled(ctx context.Context, arg SetLyricsProviderEnabledParams) error {
+	_, err := q.db.Exec(ctx, setLyricsProviderEnabled, arg.ID, arg.IsEnabled)
+	return err
+}
+
+const setLyricsProviderHealth = `-- name: SetLyricsProviderHealth :exec
+UPDATE lyrics_providers SET health_status = $2, updated_at = now() WHERE id = $1
+`
+
+type SetLyricsProviderHealthParams struct {
+	ID           pgtype.UUID `json:"id"`
+	HealthStatus string      `json:"health_status"`
+}
+
+func (q *Queries) SetLyricsProviderHealth(ctx context.Context, arg SetLyricsProviderHealthParams) error {
+	_, err := q.db.Exec(ctx, setLyricsProviderHealth, arg.ID, arg.HealthStatus)
+	return err
+}
+
+const updateLyricsProviderPriority = `-- name: UpdateLyricsProviderPriority :exec
+UPDATE lyrics_providers SET priority = $2, updated_at = now() WHERE id = $1
+`
+
+type UpdateLyricsProviderPriorityParams struct {
+	ID       pgtype.UUID `json:"id"`
+	Priority int32       `json:"priority"`
+}
+
+func (q *Queries) UpdateLyricsProviderPriority(ctx context.Context, arg UpdateLyricsProviderPriorityParams) error {
+	_, err := q.db.Exec(ctx, updateLyricsProviderPriority, arg.ID, arg.Priority)
+	return err
 }

@@ -18,6 +18,11 @@ type Info struct {
 	Artist      string
 	Album       string
 	TrackNumber *int
+	// Genre and Year back the Sprint 14 ingest filter rules (ADR 0008) —
+	// both are "" / nil when the file has no such tag, which the filter
+	// treats as "doesn't apply" rather than a rejection.
+	Genre string
+	Year  *int
 }
 
 type probeFormat struct {
@@ -60,6 +65,7 @@ func Probe(ctx context.Context, path string) (*Info, error) {
 		Title:      tags["title"],
 		Artist:     tags["artist"],
 		Album:      tags["album"],
+		Genre:      tags["genre"],
 	}
 	// ffprobe often reports "track" as "3/12" — take the numerator.
 	if raw, ok := tags["track"]; ok {
@@ -68,7 +74,27 @@ func Probe(ctx context.Context, path string) (*Info, error) {
 			info.TrackNumber = &n
 		}
 	}
+	// "date" is the more common ID3v2 tag; some files use "year" instead.
+	// Either can be a bare year or a full date ("2023" or "2023-05-01") —
+	// Sscanf %d just reads the leading digits either way.
+	if raw, ok := tags["date"]; ok {
+		if year, ok := parseYear(raw); ok {
+			info.Year = &year
+		}
+	} else if raw, ok := tags["year"]; ok {
+		if year, ok := parseYear(raw); ok {
+			info.Year = &year
+		}
+	}
 	return info, nil
+}
+
+func parseYear(raw string) (int, bool) {
+	var year int
+	if _, err := fmt.Sscanf(raw, "%d", &year); err != nil || year < 1000 || year > 9999 {
+		return 0, false
+	}
+	return year, true
 }
 
 func lowercaseKeys(m map[string]string) map[string]string {

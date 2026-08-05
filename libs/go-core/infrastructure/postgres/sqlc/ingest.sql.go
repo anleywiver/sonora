@@ -125,6 +125,61 @@ func (q *Queries) GetIngestJobByID(ctx context.Context, id pgtype.UUID) (IngestJ
 	return i, err
 }
 
+const listAllIngestJobs = `-- name: ListAllIngestJobs :many
+SELECT id, user_id, source_type, status, song_id, error_message, created_at, updated_at, temp_path FROM ingest_jobs
+WHERE ($1::text IS NULL OR status = $1)
+  AND (
+    $2::timestamptz IS NULL
+    OR (created_at, id) < ($2::timestamptz, $3::uuid)
+  )
+ORDER BY created_at DESC, id DESC
+LIMIT $4
+`
+
+type ListAllIngestJobsParams struct {
+	Status          *string            `json:"status"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        pgtype.UUID        `json:"cursor_id"`
+	LimitCount      int32              `json:"limit_count"`
+}
+
+// Sprint 14 admin Job Queue (docs/screens-spec.md #20) — same cursor
+// pattern as ListIngestJobsByUser, minus the per-user scoping.
+func (q *Queries) ListAllIngestJobs(ctx context.Context, arg ListAllIngestJobsParams) ([]IngestJob, error) {
+	rows, err := q.db.Query(ctx, listAllIngestJobs,
+		arg.Status,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IngestJob
+	for rows.Next() {
+		var i IngestJob
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.SourceType,
+			&i.Status,
+			&i.SongID,
+			&i.ErrorMessage,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.TempPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCompletedIngestJobsWithTempPath = `-- name: ListCompletedIngestJobsWithTempPath :many
 SELECT id, temp_path FROM ingest_jobs WHERE status = 'completed' AND temp_path IS NOT NULL LIMIT $1
 `
@@ -228,5 +283,23 @@ UPDATE ingest_jobs SET status = 'pending', error_message = NULL, updated_at = no
 
 func (q *Queries) ResetIngestJobToPending(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, resetIngestJobToPending, id)
+	return err
+}
+
+const skipIngestJobByFilter = `-- name: SkipIngestJobByFilter :exec
+UPDATE ingest_jobs SET status = 'skipped_by_filter', error_message = $2, temp_path = NULL, updated_at = now() WHERE id = $1
+`
+
+type SkipIngestJobByFilterParams struct {
+	ID           pgtype.UUID `json:"id"`
+	ErrorMessage *string     `json:"error_message"`
+}
+
+// Sprint 14 sisipan (ADR 0008) — terminal state distinct from 'failed':
+// the item was never actually broken, it just didn't match a configured
+// filter rule for its source. temp_path is cleared same as a completed
+// job (ADR 0008: skipped items shouldn't linger as temp files either).
+func (q *Queries) SkipIngestJobByFilter(ctx context.Context, arg SkipIngestJobByFilterParams) error {
+	_, err := q.db.Exec(ctx, skipIngestJobByFilter, arg.ID, arg.ErrorMessage)
 	return err
 }

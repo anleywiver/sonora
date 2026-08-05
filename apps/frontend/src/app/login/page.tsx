@@ -15,6 +15,45 @@ export default function LoginPage() {
       >
         Continue with Google
       </a>
+
+      {/* Apple sign-in has no backend (no Apple OAuth client configured) —
+          shown disabled per screens-spec #2 rather than omitted, since the
+          spec explicitly calls for the placeholder to communicate "coming
+          later", not "doesn't exist". */}
+      <button
+        disabled
+        className="flex w-full max-w-xs cursor-not-allowed items-center justify-center gap-3 rounded-2xl border border-border bg-white/5 px-6 py-3 font-semibold text-text-secondary opacity-50"
+      >
+        Continue with Apple
+      </button>
+
+      <div className="flex w-full max-w-xs items-center gap-3 text-xs text-text-secondary">
+        <div className="h-px flex-1 bg-border" />
+        or continue with email
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      {/* No email/password endpoint exists (Sprint 4 decision — see
+          CLAUDE.md) — shown disabled, same placeholder treatment as Apple
+          above, rather than a divider that leads to nothing. */}
+      <div className="w-full max-w-xs space-y-3 opacity-50">
+        <input
+          disabled
+          placeholder="Email"
+          className="w-full cursor-not-allowed rounded-2xl border border-border bg-white/5 px-4 py-3 text-sm placeholder:text-text-secondary"
+        />
+        <input
+          disabled
+          placeholder="Password"
+          className="w-full cursor-not-allowed rounded-2xl border border-border bg-white/5 px-4 py-3 text-sm placeholder:text-text-secondary"
+        />
+        <button
+          disabled
+          className="w-full cursor-not-allowed rounded-2xl bg-primary px-6 py-3 text-sm font-semibold text-white"
+        >
+          Sign in
+        </button>
+      </div>
     </main>
   );
 }

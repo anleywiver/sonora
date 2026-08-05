@@ -18,8 +18,10 @@ import (
 	appanalytics "sonora.dev/go-core/application/analytics"
 	appauth "sonora.dev/go-core/application/auth"
 	appcatalog "sonora.dev/go-core/application/catalog"
+	appdashboard "sonora.dev/go-core/application/dashboard"
 	apphistory "sonora.dev/go-core/application/history"
 	appingest "sonora.dev/go-core/application/ingest"
+	appingestfilter "sonora.dev/go-core/application/ingestfilter"
 	appingestsource "sonora.dev/go-core/application/ingestsource"
 	applibrary "sonora.dev/go-core/application/library"
 	applyrics "sonora.dev/go-core/application/lyrics"
@@ -112,6 +114,12 @@ func main() {
 
 	backupHandler := handlers.NewBackupHandler(asynqClient)
 
+	dashboardService := appdashboard.NewService(queries)
+	dashboardHandler := handlers.NewDashboardHandler(dashboardService)
+
+	ingestFilterService := appingestfilter.NewService(queries)
+	ingestFilterHandler := handlers.NewIngestFilterHandler(ingestFilterService)
+
 	catalogService := appcatalog.NewService(queries, credentialsBox, cfg.JWTAccessSecret, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	catalogHandler := handlers.NewCatalogHandler(catalogService)
 
@@ -133,6 +141,7 @@ func main() {
 	lrclibClient := infralyrics.NewLRCLIBClient()
 	lyricsService := applyrics.NewService(queries, catalogService, lrclibClient)
 	lyricsHandler := handlers.NewLyricsHandler(lyricsService)
+	lyricsProviderHandler := handlers.NewLyricsProviderHandler(lyricsService)
 
 	wsHub := ws.NewHub()
 	wsTokens := wstoken.NewIssuer(redisClient)
@@ -216,6 +225,14 @@ func main() {
 	adminGroup.Get("/analytics/top-played", analyticsHandler.TopPlayed)
 	adminGroup.Get("/analytics/storage-growth", analyticsHandler.StorageGrowth)
 	adminGroup.Post("/backup/run", backupHandler.Run)
+	adminGroup.Get("/dashboard", dashboardHandler.Get)
+	adminGroup.Get("/jobs", ingestHandler.AdminList)
+	adminGroup.Post("/jobs/:id/retry", ingestHandler.AdminRetry)
+	adminGroup.Get("/lyrics-providers", lyricsProviderHandler.List)
+	adminGroup.Patch("/lyrics-providers/:id", lyricsProviderHandler.Update)
+	adminGroup.Get("/ingest-sources/:source_type/filters", ingestFilterHandler.List)
+	adminGroup.Post("/ingest-sources/:source_type/filters", ingestFilterHandler.Create)
+	adminGroup.Delete("/ingest-sources/:source_type/filters/:id", ingestFilterHandler.Delete)
 
 	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
 	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)
@@ -226,6 +243,7 @@ func main() {
 	api.Get("/albums/:id", requireAuth, catalogHandler.GetAlbum)
 	api.Get("/artists/:id", requireAuth, catalogHandler.GetArtist)
 	api.Get("/artists/:id/albums", requireAuth, catalogHandler.ListArtistAlbums)
+	api.Get("/artists/:id/songs", requireAuth, catalogHandler.ListArtistSongs)
 	api.Get("/genres", requireAuth, catalogHandler.ListGenres)
 
 	searchGroup := api.Group("/search", requireAuth)

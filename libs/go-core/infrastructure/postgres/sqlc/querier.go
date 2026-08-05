@@ -18,6 +18,7 @@ type Querier interface {
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
 	CreateHistoryEntry(ctx context.Context, arg CreateHistoryEntryParams) (PlayHistory, error)
+	CreateIngestFilterRule(ctx context.Context, arg CreateIngestFilterRuleParams) (IngestFilterRule, error)
 	CreateIngestJob(ctx context.Context, arg CreateIngestJobParams) (IngestJob, error)
 	CreateIngestSourceConnection(ctx context.Context, arg CreateIngestSourceConnectionParams) (IngestSourceConnection, error)
 	CreateLyrics(ctx context.Context, arg CreateLyricsParams) (Lyric, error)
@@ -25,6 +26,7 @@ type Querier interface {
 	CreateSong(ctx context.Context, arg CreateSongParams) (Song, error)
 	CreateStorageAccount(ctx context.Context, arg CreateStorageAccountParams) (StorageAccount, error)
 	CreateStorageFile(ctx context.Context, arg CreateStorageFileParams) (StorageFile, error)
+	DeleteIngestFilterRule(ctx context.Context, arg DeleteIngestFilterRuleParams) (int64, error)
 	DeleteIngestJob(ctx context.Context, arg DeleteIngestJobParams) (int64, error)
 	DeleteIngestSourceConnection(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteSong(ctx context.Context, id pgtype.UUID) error
@@ -40,6 +42,8 @@ type Querier interface {
 	GetAlbumDetail(ctx context.Context, id pgtype.UUID) (GetAlbumDetailRow, error)
 	GetArtistByID(ctx context.Context, id pgtype.UUID) (Artist, error)
 	GetArtistByName(ctx context.Context, name string) (Artist, error)
+	GetBackgroundJobsSummary(ctx context.Context) ([]GetBackgroundJobsSummaryRow, error)
+	GetDashboardStats(ctx context.Context) (GetDashboardStatsRow, error)
 	GetIngestJobByID(ctx context.Context, id pgtype.UUID) (IngestJob, error)
 	GetIngestSourceConnectionByID(ctx context.Context, id pgtype.UUID) (IngestSourceConnection, error)
 	GetLyricsBySongID(ctx context.Context, songID pgtype.UUID) (Lyric, error)
@@ -62,6 +66,9 @@ type Querier interface {
 	IncrementStorageAccountUsedBytes(ctx context.Context, arg IncrementStorageAccountUsedBytesParams) error
 	ListActiveIngestSourceConnections(ctx context.Context) ([]IngestSourceConnection, error)
 	ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) ([]Album, error)
+	// Sprint 14 admin Job Queue (docs/screens-spec.md #20) — same cursor
+	// pattern as ListIngestJobsByUser, minus the per-user scoping.
+	ListAllIngestJobs(ctx context.Context, arg ListAllIngestJobsParams) ([]IngestJob, error)
 	// Sprint 10 garbage collector target: completed jobs still holding a
 	// temp_path. Deliberately excludes 'failed' jobs — RetryJob needs that
 	// file to still be on disk.
@@ -71,8 +78,10 @@ type Querier interface {
 	ListContinueListening(ctx context.Context, arg ListContinueListeningParams) ([]ListContinueListeningRow, error)
 	ListGenres(ctx context.Context) ([]Genre, error)
 	ListHistoryByUser(ctx context.Context, arg ListHistoryByUserParams) ([]PlayHistory, error)
+	ListIngestFilterRules(ctx context.Context, sourceType string) ([]IngestFilterRule, error)
 	ListIngestJobsByUser(ctx context.Context, arg ListIngestJobsByUserParams) ([]IngestJob, error)
 	ListIngestSourceConnections(ctx context.Context) ([]IngestSourceConnection, error)
+	ListLyricsProviders(ctx context.Context) ([]LyricsProvider, error)
 	ListQueueByUser(ctx context.Context, userID pgtype.UUID) ([]QueueItem, error)
 	// Stand-in for "trending" until play_history exists (Sprint 6) to compute
 	// real play-count trends.
@@ -80,9 +89,22 @@ type Querier interface {
 	ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]Song, error)
 	ListSongsByArtist(ctx context.Context, arg ListSongsByArtistParams) ([]Song, error)
 	ListStorageAccounts(ctx context.Context) ([]StorageAccount, error)
+	ListStorageDistribution(ctx context.Context) ([]ListStorageDistributionRow, error)
 	MarkIngestJobProcessing(ctx context.Context, id pgtype.UUID) error
+	// Sprint 14: every GetLyrics attempt for a provider increments
+	// total_lookups; matched only increments successful_matches too — this is
+	// what makes "Match Rate" on the admin Lyrics Source page real instead of
+	// fabricated (a miss previously left no trace at all).
+	RecordLyricsLookup(ctx context.Context, arg RecordLyricsLookupParams) error
 	RemoveQueueItem(ctx context.Context, arg RemoveQueueItemParams) error
 	ResetIngestJobToPending(ctx context.Context, id pgtype.UUID) error
+	SetLyricsProviderEnabled(ctx context.Context, arg SetLyricsProviderEnabledParams) error
+	SetLyricsProviderHealth(ctx context.Context, arg SetLyricsProviderHealthParams) error
+	// Sprint 14 sisipan (ADR 0008) — terminal state distinct from 'failed':
+	// the item was never actually broken, it just didn't match a configured
+	// filter rule for its source. temp_path is cleared same as a completed
+	// job (ADR 0008: skipped items shouldn't linger as temp files either).
+	SkipIngestJobByFilter(ctx context.Context, arg SkipIngestJobByFilterParams) error
 	// musicbrainz_id always fills in; cover_url only fills in if still empty
 	// (never overwrites a cover the user or an earlier match already set).
 	UpdateAlbumMusicbrainzAndCover(ctx context.Context, arg UpdateAlbumMusicbrainzAndCoverParams) error
@@ -90,6 +112,7 @@ type Querier interface {
 	// by an earlier, possibly more specific match.
 	UpdateArtistMusicbrainzID(ctx context.Context, arg UpdateArtistMusicbrainzIDParams) error
 	UpdateIngestSourceConnectionSync(ctx context.Context, arg UpdateIngestSourceConnectionSyncParams) error
+	UpdateLyricsProviderPriority(ctx context.Context, arg UpdateLyricsProviderPriorityParams) error
 	UpdateQueueItemPosition(ctx context.Context, arg UpdateQueueItemPositionParams) (int64, error)
 	UpdateSongMusicbrainzID(ctx context.Context, arg UpdateSongMusicbrainzIDParams) error
 	UpdateSongWaveform(ctx context.Context, arg UpdateSongWaveformParams) error

@@ -30,3 +30,8 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/
+
+# Nginx: which template is "enabled" is a per-deployment choice (bootstrap
+# vs full SSL config, see infrastructure/nginx/README.md) — same
+# sites-available/sites-enabled convention as classic nginx packaging.
+infrastructure/nginx/templates-active/*.template

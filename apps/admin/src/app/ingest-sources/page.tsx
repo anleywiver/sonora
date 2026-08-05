@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiFetch, ApiError } from "@/lib/api";
@@ -13,6 +13,13 @@ interface Connection {
   account_email: string;
   is_active: boolean;
   last_synced_at: string | null;
+}
+
+interface FilterRule {
+  id: string;
+  source_type: string;
+  rule_type: "genre_allow" | "year_min" | "year_max";
+  value: string;
 }
 
 const providerLabel: Record<Connection["provider"], string> = {
@@ -164,7 +171,168 @@ export default function IngestSourcesPage() {
           })
         )}
       </div>
+
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <FilterRulesPanel sourceType="bandcamp" title="Bandcamp Filter Rules" />
+        <FilterRulesPanel sourceType="cloud_sync" title="Cloud Sync Filter Rules" />
+      </div>
     </main>
+  );
+}
+
+// Sprint 14 sisipan (ADR 0008) — genre allow-list + year range, applies
+// ONLY to auto-ingest from this source. Manual upload is never filtered,
+// so that's called out explicitly rather than left implicit.
+function FilterRulesPanel({ sourceType, title }: { sourceType: "bandcamp" | "cloud_sync"; title: string }) {
+  const [rules, setRules] = useState<FilterRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [genreInput, setGenreInput] = useState("");
+  const [yearMinInput, setYearMinInput] = useState("");
+  const [yearMaxInput, setYearMaxInput] = useState("");
+
+  function load() {
+    setLoading(true);
+    apiFetch<FilterRule[]>(`/admin/ingest-sources/${sourceType}/filters`)
+      .then(setRules)
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load filter rules"))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(load, [sourceType]);
+
+  function addRule(ruleType: FilterRule["rule_type"], value: string) {
+    if (!value.trim()) return;
+    apiFetch(`/admin/ingest-sources/${sourceType}/filters`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rule_type: ruleType, value: value.trim() }),
+    })
+      .then(load)
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to add rule"));
+  }
+
+  function removeRule(id: string) {
+    apiFetch(`/admin/ingest-sources/${sourceType}/filters/${id}`, { method: "DELETE" })
+      .then(load)
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to remove rule"));
+  }
+
+  const genreRules = rules.filter((r) => r.rule_type === "genre_allow");
+  const yearMin = rules.find((r) => r.rule_type === "year_min");
+  const yearMax = rules.find((r) => r.rule_type === "year_max");
+
+  return (
+    <div className="rounded-card border border-border bg-card p-5">
+      <h2 className="text-sm font-semibold text-text-secondary">{title}</h2>
+      <p className="mt-1 text-xs text-text-secondary">
+        Cuma berlaku untuk auto-ingest dari {sourceType === "bandcamp" ? "Bandcamp" : "cloud sync"} — manual upload
+        tidak pernah difilter.
+      </p>
+
+      {error && <p className="mt-2 text-xs text-error">{error}</p>}
+
+      {loading ? (
+        <p className="mt-4 text-sm text-text-secondary">Loading…</p>
+      ) : (
+        <>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-text-secondary">Genre allow-list</p>
+            <div className="flex flex-wrap gap-2">
+              {genreRules.map((r) => (
+                <span
+                  key={r.id}
+                  className="flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1 text-xs text-accent"
+                >
+                  {r.value}
+                  <button onClick={() => removeRule(r.id)} aria-label={`Remove ${r.value}`}>
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+              {genreRules.length === 0 && (
+                <span className="text-xs text-text-secondary">Semua genre diperbolehkan (belum ada rule)</span>
+              )}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={genreInput}
+                onChange={(e) => setGenreInput(e.target.value)}
+                placeholder="Tambah genre (mis. Jazz)"
+                className="flex-1 rounded-control border border-border bg-background px-3 py-1.5 text-xs"
+              />
+              <button
+                onClick={() => {
+                  addRule("genre_allow", genreInput);
+                  setGenreInput("");
+                }}
+                className="rounded-control bg-primary px-3 py-1.5 text-xs font-semibold"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-text-secondary">Year range</p>
+            <div className="flex items-center gap-2">
+              {yearMin ? (
+                <span className="flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1 text-xs text-accent">
+                  Min {yearMin.value}
+                  <button onClick={() => removeRule(yearMin.id)} aria-label="Remove year min">
+                    <X size={12} />
+                  </button>
+                </span>
+              ) : (
+                <input
+                  value={yearMinInput}
+                  onChange={(e) => setYearMinInput(e.target.value)}
+                  placeholder="Min tahun"
+                  className="w-28 rounded-control border border-border bg-background px-3 py-1.5 text-xs"
+                />
+              )}
+              {!yearMin && (
+                <button
+                  onClick={() => {
+                    addRule("year_min", yearMinInput);
+                    setYearMinInput("");
+                  }}
+                  className="rounded-control bg-primary px-3 py-1.5 text-xs font-semibold"
+                >
+                  <Plus size={12} />
+                </button>
+              )}
+              {yearMax ? (
+                <span className="flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1 text-xs text-accent">
+                  Max {yearMax.value}
+                  <button onClick={() => removeRule(yearMax.id)} aria-label="Remove year max">
+                    <X size={12} />
+                  </button>
+                </span>
+              ) : (
+                <input
+                  value={yearMaxInput}
+                  onChange={(e) => setYearMaxInput(e.target.value)}
+                  placeholder="Max tahun"
+                  className="w-28 rounded-control border border-border bg-background px-3 py-1.5 text-xs"
+                />
+              )}
+              {!yearMax && (
+                <button
+                  onClick={() => {
+                    addRule("year_max", yearMaxInput);
+                    setYearMaxInput("");
+                  }}
+                  className="rounded-control bg-primary px-3 py-1.5 text-xs font-semibold"
+                >
+                  <Plus size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

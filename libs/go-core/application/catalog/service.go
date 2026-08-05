@@ -96,6 +96,7 @@ type AlbumDetail struct {
 	CoverURL   string
 	ArtistID   uuid.UUID
 	ArtistName string
+	ReleasedAt *time.Time
 }
 
 func (s *Service) GetAlbum(ctx context.Context, id uuid.UUID) (*AlbumDetail, error) {
@@ -106,12 +107,17 @@ func (s *Service) GetAlbum(ctx context.Context, id uuid.UUID) (*AlbumDetail, err
 	if err != nil {
 		return nil, fmt.Errorf("catalog: get album: %w", err)
 	}
+	var releasedAt *time.Time
+	if row.ReleasedAt.Valid {
+		releasedAt = &row.ReleasedAt.Time
+	}
 	return &AlbumDetail{
 		ID:         fromPgUUID(row.ID),
 		Title:      row.Title,
 		CoverURL:   strOrEmpty(row.CoverUrl),
 		ArtistID:   fromPgUUID(row.ArtistID),
 		ArtistName: row.ArtistName,
+		ReleasedAt: releasedAt,
 	}, nil
 }
 
@@ -127,6 +133,38 @@ func (s *Service) ListSongsByAlbum(ctx context.Context, albumID uuid.UUID) ([]*S
 	rows, err := s.q.ListSongsByAlbum(ctx, toPgUUID(albumID))
 	if err != nil {
 		return nil, fmt.Errorf("catalog: list songs by album: %w", err)
+	}
+	out := make([]*Song, 0, len(rows))
+	for _, row := range rows {
+		var trackNumber *int
+		if row.TrackNumber != nil {
+			n := int(*row.TrackNumber)
+			trackNumber = &n
+		}
+		out = append(out, &Song{
+			ID:          fromPgUUID(row.ID),
+			Title:       row.Title,
+			DurationMs:  int(row.DurationMs),
+			TrackNumber: trackNumber,
+			AlbumID:     fromPgUUIDPtr(row.AlbumID),
+		})
+	}
+	return out, nil
+}
+
+const popularSongsLimit = 10
+
+// ListSongsByArtist stands in for "Popular songs" on Artist Detail (most
+// recently added — same "no real play-count ranking yet" caveat as
+// ListRecent above; play_history is per-user, not a global per-song
+// counter we could rank by without a new aggregate query).
+func (s *Service) ListSongsByArtist(ctx context.Context, artistID uuid.UUID) ([]*Song, error) {
+	rows, err := s.q.ListSongsByArtist(ctx, sqlc.ListSongsByArtistParams{
+		ArtistID: toPgUUID(artistID),
+		Limit:    popularSongsLimit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("catalog: list songs by artist: %w", err)
 	}
 	out := make([]*Song, 0, len(rows))
 	for _, row := range rows {

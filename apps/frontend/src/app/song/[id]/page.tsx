@@ -1,6 +1,7 @@
 "use client";
 
 import { Play, Pause, Heart, ListPlus, Download, Check } from "lucide-react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -157,9 +158,21 @@ export default function SongDetailPage() {
       />
       <div className="mt-6 text-center">
         <h1 className="text-xl font-bold">{song.title}</h1>
-        <p className="mt-1 text-sm text-text-secondary">{song.artist_name}</p>
+        <Link
+          href={`/artist/${song.artist_id}`}
+          className="mt-1 inline-block text-sm text-text-secondary hover:text-text-primary"
+        >
+          {song.artist_name}
+        </Link>
         {song.album_title && (
-          <p className="mt-0.5 text-xs text-text-secondary">{song.album_title}</p>
+          <p className="mt-0.5">
+            <Link
+              href={`/album/${song.album_id}`}
+              className="text-xs text-text-secondary hover:text-text-primary"
+            >
+              {song.album_title}
+            </Link>
+          </p>
         )}
         <p className="mt-1 text-xs text-text-secondary">{formatDuration(song.duration_ms)}</p>
       </div>

@@ -32,7 +32,7 @@ Base URL: `https://api.sonora.local/api/v1` (dev) — semua endpoint di bawah re
 | GET | `/songs/:id/stream?token=` — proxy stream, support `Range` header |
 | GET | `/songs/:id/lyrics` |
 | GET | `/albums/:id` |
-| GET | `/artists/:id`, `/artists/:id/albums` |
+| GET | `/artists/:id`, `/artists/:id/albums`, `/artists/:id/songs` (Sprint 14) |
 | GET | `/genres` |
 
 ## Search
@@ -94,6 +94,7 @@ Base URL: `https://api.sonora.local/api/v1` (dev) — semua endpoint di bawah re
 | POST | `/admin/storage/accounts/:id/health-check` |
 | GET/POST/DELETE | `/admin/ingest-sources/connections[/:id]` (Sprint 10, ADR 0004) |
 | POST | `/admin/ingest-sources/connections/:id/sync` |
+| GET/POST/DELETE | `/admin/ingest-sources/:source_type/filters[/:id]` (Sprint 14 sisipan, ADR 0008 — `source_type` is `bandcamp` or `cloud_sync` only, never `manual_upload`) |
 | POST | `/admin/backup/run` (Sprint 13, ADR 0007) |
 | GET | `/metrics` (Sprint 13 — no auth, no `/api/v1` prefix, ADR 0007) |
 | GET/POST | `/admin/jobs`, `/admin/jobs/:id/retry` |

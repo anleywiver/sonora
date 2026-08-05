@@ -48,11 +48,98 @@ module bersama (`go.work`) — JANGAN campur keduanya.
 - `docs/roadmap.md` — roadmap Sprint 1-13 + task breakdown per fase
 - `libs/go-core/infrastructure/postgres/migrations/` — 19 tabel final (source of truth schema)
 
-## Status saat ini: Sprint 13 selesai — lanjut Sprint 14 (UI Fidelity & Production Readiness, INI BUKAN SPRINT TERAKHIR PERENCANAAN — baca `docs/roadmap.md`, project baru "selesai" setelah Sprint 14)
+## Status saat ini: Sprint 14 (UI Fidelity & Production Readiness) — struktur inti selesai, penyisipan fitur tambahan atas permintaan user sedang berjalan (lihat "Riwayat Sprint" di bawah)
 
 Lihat detail masing-masing sprint di "Riwayat Sprint" di bawah.
 
 ## Riwayat Sprint
+
+### Sprint 14 (berjalan — struktur inti selesai)
+
+Sprint 14 (UI Fidelity & Production Readiness) inti selesai (2026-08-05):
+halaman yang tadinya kosong dibangun dengan data asli, image production
+dibuat dan diverifikasi jalan, Nginx+SSL disiapkan lengkap dengan restore
+drill config-syntax nyata, dan ADR 0001 di-cross-check ulang.
+
+- [x] **Splash Screen** — dipakai sebagai loading state `Providers`
+      (bootstrap sesi), bukan timer buatan 1.5 detik — tampil selama
+      bootstrap beneran berjalan, bukan delay palsu demi cocok sama spec
+- [x] **Artist Detail** (`/artist/:id`) — Play+Follow (Follow = reuse
+      favorites API type=artist yang sudah ada sejak Sprint 5), Popular
+      Songs dari endpoint baru `GET /artists/:id/songs`. "Monthly
+      listeners" dan "Related artists" SENGAJA tidak dibangun — tidak ada
+      data source asli untuk itu, dianggap lebih jujur daripada
+      dikarang-karang
+- [x] **Album Detail** (`/album/:id`) — cover+judul+artist+tahun (field
+      `released_at` yang ternyata sudah di-query tapi belum pernah di-
+      expose ke JSON), tracklist dengan heart per-track. "Genre" SENGAJA
+      tidak ditampilkan — skema cuma associate genre ke song, bukan album
+- [x] Login — tombol Apple + form email/password ditampilkan sebagai
+      placeholder disabled (bukan dihilangkan) sesuai screens-spec — tidak
+      ada backend untuk keduanya, konsisten dengan keputusan Sprint 4
+- [x] Admin Dashboard — `GET /admin/dashboard` (stat 4 kolom, storage
+      distribution per drive, background jobs summary), Job Queue —
+      `GET /admin/jobs` + `POST /admin/jobs/:id/retry` (admin-scoped,
+      bukan per-user), Lyrics Source — `GET/PATCH /admin/lyrics-providers`
+      dengan Health + Match Rate ASLI (lookup dihitung mulai sprint ini,
+      sebelumnya miss LRCLIB tidak pernah tercatat sama sekali). Reorder
+      priority pakai tombol naik/turun, bukan drag-handle — cuma ada 1
+      provider (lrclib) sekarang, drag-and-drop beneran no-op untuk 1 item
+- [x] `apps/frontend`/`apps/admin` sekarang punya Dockerfile production
+      (`output: "standalone"`) + jadi service resmi di `docker-compose.yml`
+      — sebelumnya cuma pernah dijalankan ad-hoc lewat `docker run` selama
+      development
+- [x] Nginx + SSL (`infrastructure/nginx/`) — reverse proxy 3 subdomain
+      (frontend/admin/api), bootstrap 2 fase (HTTP dulu buat ACME
+      challenge, baru HTTPS) karena cert belum ada saat nginx pertama kali
+      jalan. Pola sama seperti `sites-available`/`sites-enabled` nginx
+      klasik
+
+Diverifikasi nyata:
+- Upload lagu asli via API → cek `GET /artists/:id/songs`,
+  `GET /albums/:id` (released_at benar), `GET /admin/dashboard`,
+  `GET /admin/jobs`, `GET /admin/lyrics-providers` — semua data ASLI,
+  bukan placeholder
+- Lyrics lookup nyata ke LRCLIB (lagu fiktif → miss tercatat) →
+  `total_lookups` naik dari 0 ke 1, `match_rate_pct` 0% (bukan lagi
+  sentinel "-1 no data")
+- `next build` production BENERAN dijalankan (pertama kalinya sesi ini —
+  sebelumnya cuma `next dev`) untuk frontend & admin, image di-build,
+  container dijalankan, `/login`/`/`/`/analytics` semua 200. Ketemu 1 bug
+  nyata: standalone server default listen di port 3000 walau di-dev pakai
+  `-p 3001` — admin butuh `PORT=3001` eksplisit di docker-compose
+- Nginx config disintaks-cek dengan `nginx -t` BENERAN (bukan dibaca
+  doang): fase bootstrap lolos standalone; fase full-SSL butuh dummy cert
+  + 3 container dummy bernama persis `frontend`/`admin`/`api` di network
+  yang sama (nginx resolve upstream saat startup) — dengan itu, lolos
+  bersih. Fase bootstrap juga dijalankan lewat docker-compose ASLI (bukan
+  container terpisah), dikonfirmasi routing Host-header bekerja
+- ADR 0001 cross-check: semua keputusan awal (storage pool, monorepo,
+  hybrid DB, WebSocket+Active Device, 1 VPS, cursor pagination, ingest
+  legal-only, backup+restore drill) sudah terpenuhi — satu-satunya gap
+  (Nginx+SSL) itulah yang jadi kerjaan Sprint 14 ini
+
+**Sisipan atas permintaan user (di tengah Sprint 14)**: Ingest Filter
+Rules (genre allow-list + year range untuk auto-ingest Bandcamp/cloud
+sync SAJA, manual upload tidak pernah difilter) — lihat ADR 0008. Genre/
+tahun didapat dari tag ID3 (ffprobe), BUKAN dari listing Bandcamp/Dropbox
+(data itu cuma ada di file audio-nya, bukan di metadata listing) — jadi
+cek filter terjadi setelah file di-download & di-probe, sebelum upload
+storage/waveform/MusicBrainz. Data hilang (genre/tahun kosong) TIDAK
+memblokir (fail-open) — ID3 tag kosong itu wajar, memblokir karena
+ketiadaan data lebih berisiko daripada membiarkan satu item lolos.
+Diverifikasi BENERAN: job `source_type=bandcamp` dengan tag genre "Pop"
++ rule `genre_allow=Rock` → status `skipped_by_filter`, temp file
+terhapus, TIDAK ada song dibuat; upload manual dengan file yang SAMA
+PERSIS (genre Pop) → TIDAK difilter (gagal di step lain — upload Drive
+asli, kredensial belum ada — sama sekali bukan dari filter), membuktikan
+manual_upload benar-benar tidak pernah kena filter.
+
+Dua koreksi teknis dari permintaan asli user (dicatat karena signifikan):
+migration diberi nomor `000008` bukan `000007` (sudah dipakai duluan sesi
+ini untuk lyrics provider stats), dan `ingest_jobs_status_check` TETAP
+pakai `'processing'` (bukan diganti `'running'` seperti diminta) supaya
+tidak merusak `MarkIngestJobProcessing` yang sudah dipakai sejak Sprint 3.
 
 ### Sprint 13 (selesai)
 
