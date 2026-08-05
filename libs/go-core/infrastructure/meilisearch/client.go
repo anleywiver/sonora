@@ -44,6 +44,20 @@ func (c *Client) IndexSong(ctx context.Context, doc SongDocument) error {
 	return nil
 }
 
+// DeleteSong removes a song from the index (Sprint 14 admin Manage Songs,
+// ADR 0010) — a 404 (index/document doesn't exist) is not an error here,
+// same "missing index just means nothing to do" reasoning as SearchSongs.
+func (c *Client) DeleteSong(ctx context.Context, songID string) error {
+	if _, err := c.svc.Index(SongsIndex).DeleteDocumentWithContext(ctx, songID, nil); err != nil {
+		var meiliErr *meili.Error
+		if errors.As(err, &meiliErr) && meiliErr.StatusCode == http.StatusNotFound {
+			return nil
+		}
+		return fmt.Errorf("meilisearch: delete song: %w", err)
+	}
+	return nil
+}
+
 type SearchResult struct {
 	Hits           []SongDocument
 	EstimatedTotal int64

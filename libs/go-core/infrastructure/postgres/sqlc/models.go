@@ -172,6 +172,7 @@ type Song struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	WaveformPeaks []int16            `json:"waveform_peaks"`
 	MusicbrainzID *string            `json:"musicbrainz_id"`
+	DeletedAt     pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type SongGenre struct {
@@ -206,7 +207,7 @@ type StorageFile struct {
 
 type User struct {
 	ID        pgtype.UUID        `json:"id"`
-	GoogleID  string             `json:"google_id"`
+	GoogleID  *string            `json:"google_id"`
 	Email     string             `json:"email"`
 	Name      string             `json:"name"`
 	AvatarUrl *string            `json:"avatar_url"`

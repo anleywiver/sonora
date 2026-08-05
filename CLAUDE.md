@@ -161,6 +161,26 @@ DB (isi `google_id` manual) → status API benar berubah dari "invited" ke
 `GOOGLE_CLIENT_ID`/`SECRET` asli, sama seperti semua fitur Google lain di
 project ini.
 
+**Sisipan lanjutan — Admin Manage Songs** (ADR 0010): `songs.deleted_at`
+baru (migration `000010`, soft delete). Edit metadata artist/album pakai
+find-or-create yang SAMA PERSIS dengan pipeline ingest (bukan update
+kolom teks bebas — keduanya foreign key), genre ganti SELURUH relasi
+`song_genres` jadi satu genre (UI cuma satu field genre, bukan
+multi-select). Scope soft-delete SENGAJA dibatasi dan didokumentasikan
+jujur di ADR: cuma hilang dari list admin + index Meilisearch — kalau
+lagu itu masih ada di playlist/favorite user lain, link lama masih bisa
+diputar (menutup itu penuh butuh cek `deleted_at` di banyak query
+catalog/playlist/favorite/history, di luar scope "table + tombol hapus
+dengan konfirmasi" yang diminta).
+
+Diverifikasi nyata: upload lagu asli → edit title+artist BARU+album
+BARU+genre BARU sekaligus lewat API → cek DB: artist/album/genre baru
+benar dibuat (bukan overwrite yang lama, find-or-create bekerja) → hapus
+(soft) → `deleted_at` terisi di DB, hilang dari `GET /admin/songs` →
+dicek langsung ke Meilisearch (`GET /indexes/songs/documents/:id`) →
+404 asli, benar-benar terhapus dari index bukan cuma diasumsikan → hapus
+lagi → 404 (idempotent).
+
 ### Sprint 13 (selesai)
 
 Sprint 13 (Observability & DR) selesai 100% (2026-08-05). Keputusan baru

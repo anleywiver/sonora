@@ -14,7 +14,7 @@ import (
 const createSong = `-- name: CreateSong :one
 INSERT INTO songs (id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id
+RETURNING id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id, deleted_at
 `
 
 type CreateSongParams struct {
@@ -53,6 +53,7 @@ func (q *Queries) CreateSong(ctx context.Context, arg CreateSongParams) (Song, e
 		&i.UpdatedAt,
 		&i.WaveformPeaks,
 		&i.MusicbrainzID,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -67,7 +68,7 @@ func (q *Queries) DeleteSong(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getSongByChecksum = `-- name: GetSongByChecksum :one
-SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id FROM songs WHERE checksum = $1
+SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id, deleted_at FROM songs WHERE checksum = $1
 `
 
 // Used by the ingest pipeline for dedup before touching storage.
@@ -87,12 +88,13 @@ func (q *Queries) GetSongByChecksum(ctx context.Context, checksum string) (Song,
 		&i.UpdatedAt,
 		&i.WaveformPeaks,
 		&i.MusicbrainzID,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getSongByID = `-- name: GetSongByID :one
-SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id FROM songs WHERE id = $1
+SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id, deleted_at FROM songs WHERE id = $1
 `
 
 func (q *Queries) GetSongByID(ctx context.Context, id pgtype.UUID) (Song, error) {
@@ -111,6 +113,7 @@ func (q *Queries) GetSongByID(ctx context.Context, id pgtype.UUID) (Song, error)
 		&i.UpdatedAt,
 		&i.WaveformPeaks,
 		&i.MusicbrainzID,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -223,7 +226,7 @@ func (q *Queries) ListRecentSongs(ctx context.Context, limit int32) ([]ListRecen
 }
 
 const listSongsByAlbum = `-- name: ListSongsByAlbum :many
-SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id FROM songs WHERE album_id = $1 ORDER BY track_number ASC NULLS LAST, title ASC
+SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id, deleted_at FROM songs WHERE album_id = $1 ORDER BY track_number ASC NULLS LAST, title ASC
 `
 
 func (q *Queries) ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]Song, error) {
@@ -248,6 +251,7 @@ func (q *Queries) ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]
 			&i.UpdatedAt,
 			&i.WaveformPeaks,
 			&i.MusicbrainzID,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -260,7 +264,7 @@ func (q *Queries) ListSongsByAlbum(ctx context.Context, albumID pgtype.UUID) ([]
 }
 
 const listSongsByArtist = `-- name: ListSongsByArtist :many
-SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id FROM songs
+SELECT id, album_id, artist_id, storage_file_id, title, duration_ms, track_number, checksum, created_at, updated_at, waveform_peaks, musicbrainz_id, deleted_at FROM songs
 WHERE artist_id = $1
 ORDER BY created_at DESC, id DESC
 LIMIT $2
@@ -293,6 +297,7 @@ func (q *Queries) ListSongsByArtist(ctx context.Context, arg ListSongsByArtistPa
 			&i.UpdatedAt,
 			&i.WaveformPeaks,
 			&i.MusicbrainzID,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}

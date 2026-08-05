@@ -15,6 +15,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	appadminsongs "sonora.dev/go-core/application/adminsongs"
 	appanalytics "sonora.dev/go-core/application/analytics"
 	appauth "sonora.dev/go-core/application/auth"
 	appcatalog "sonora.dev/go-core/application/catalog"
@@ -123,6 +124,9 @@ func main() {
 
 	usersService := appusers.NewService(userRepo)
 	usersHandler := handlers.NewUsersHandler(usersService)
+
+	adminSongsService := appadminsongs.NewService(queries, meiliClient)
+	adminSongsHandler := handlers.NewAdminSongsHandler(adminSongsService)
 
 	catalogService := appcatalog.NewService(queries, credentialsBox, cfg.JWTAccessSecret, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	catalogHandler := handlers.NewCatalogHandler(catalogService)
@@ -240,6 +244,9 @@ func main() {
 	adminGroup.Get("/users", usersHandler.List)
 	adminGroup.Post("/users/invite", usersHandler.Invite)
 	adminGroup.Delete("/users/:id", usersHandler.Delete)
+	adminGroup.Get("/songs", adminSongsHandler.List)
+	adminGroup.Patch("/songs/:id", adminSongsHandler.Update)
+	adminGroup.Delete("/songs/:id", adminSongsHandler.Delete)
 
 	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
 	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)

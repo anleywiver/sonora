@@ -12,11 +12,14 @@ import (
 
 type Querier interface {
 	AddQueueItem(ctx context.Context, arg AddQueueItemParams) (QueueItem, error)
+	AddSongGenre(ctx context.Context, arg AddSongGenreParams) error
 	ClearIngestJobTempPath(ctx context.Context, id pgtype.UUID) error
 	ClearQueue(ctx context.Context, userID pgtype.UUID) error
+	ClearSongGenres(ctx context.Context, songID pgtype.UUID) error
 	CompleteIngestJob(ctx context.Context, arg CompleteIngestJobParams) error
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
+	CreateGenre(ctx context.Context, arg CreateGenreParams) (Genre, error)
 	CreateHistoryEntry(ctx context.Context, arg CreateHistoryEntryParams) (PlayHistory, error)
 	CreateIngestFilterRule(ctx context.Context, arg CreateIngestFilterRuleParams) (IngestFilterRule, error)
 	CreateIngestJob(ctx context.Context, arg CreateIngestJobParams) (IngestJob, error)
@@ -44,6 +47,7 @@ type Querier interface {
 	GetArtistByName(ctx context.Context, name string) (Artist, error)
 	GetBackgroundJobsSummary(ctx context.Context) ([]GetBackgroundJobsSummaryRow, error)
 	GetDashboardStats(ctx context.Context) (GetDashboardStatsRow, error)
+	GetGenreByName(ctx context.Context, name string) (Genre, error)
 	GetIngestJobByID(ctx context.Context, id pgtype.UUID) (IngestJob, error)
 	GetIngestSourceConnectionByID(ctx context.Context, id pgtype.UUID) (IngestSourceConnection, error)
 	GetLyricsBySongID(ctx context.Context, songID pgtype.UUID) (Lyric, error)
@@ -65,6 +69,9 @@ type Querier interface {
 	GetTopPlayedSongs(ctx context.Context, limit int32) ([]GetTopPlayedSongsRow, error)
 	IncrementStorageAccountUsedBytes(ctx context.Context, arg IncrementStorageAccountUsedBytesParams) error
 	ListActiveIngestSourceConnections(ctx context.Context) ([]IngestSourceConnection, error)
+	// Sprint 14 admin Manage Songs (ADR 0010) — search by title or artist
+	// name, same cursor-pagination shape used everywhere else in this API.
+	ListAdminSongs(ctx context.Context, arg ListAdminSongsParams) ([]ListAdminSongsRow, error)
 	ListAlbumsByArtist(ctx context.Context, artistID pgtype.UUID) ([]Album, error)
 	// Sprint 14 admin Job Queue (docs/screens-spec.md #20) — same cursor
 	// pattern as ListIngestJobsByUser, minus the per-user scoping.
@@ -105,6 +112,7 @@ type Querier interface {
 	// filter rule for its source. temp_path is cleared same as a completed
 	// job (ADR 0008: skipped items shouldn't linger as temp files either).
 	SkipIngestJobByFilter(ctx context.Context, arg SkipIngestJobByFilterParams) error
+	SoftDeleteSong(ctx context.Context, id pgtype.UUID) (int64, error)
 	// musicbrainz_id always fills in; cover_url only fills in if still empty
 	// (never overwrites a cover the user or an earlier match already set).
 	UpdateAlbumMusicbrainzAndCover(ctx context.Context, arg UpdateAlbumMusicbrainzAndCoverParams) error
@@ -114,7 +122,9 @@ type Querier interface {
 	UpdateIngestSourceConnectionSync(ctx context.Context, arg UpdateIngestSourceConnectionSyncParams) error
 	UpdateLyricsProviderPriority(ctx context.Context, arg UpdateLyricsProviderPriorityParams) error
 	UpdateQueueItemPosition(ctx context.Context, arg UpdateQueueItemPositionParams) (int64, error)
+	UpdateSongArtistAlbum(ctx context.Context, arg UpdateSongArtistAlbumParams) error
 	UpdateSongMusicbrainzID(ctx context.Context, arg UpdateSongMusicbrainzIDParams) error
+	UpdateSongTitle(ctx context.Context, arg UpdateSongTitleParams) error
 	UpdateSongWaveform(ctx context.Context, arg UpdateSongWaveformParams) error
 	UpdateStorageAccountHealth(ctx context.Context, arg UpdateStorageAccountHealthParams) error
 	UpsertPlaybackState(ctx context.Context, arg UpsertPlaybackStateParams) (PlaybackState, error)
