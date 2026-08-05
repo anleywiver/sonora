@@ -223,6 +223,85 @@ dicek langsung ke Meilisearch (`GET /indexes/songs/documents/:id`) →
 404 asli, benar-benar terhapus dari index bukan cuma diasumsikan → hapus
 lagi → 404 (idempotent).
 
+**Sisipan lanjutan — Credential-based auth + Google OAuth toggle**
+(ADR 0012): pivot terbesar dari semua sisipan Sprint 14 — username/email
++ password sekarang jadi jalur login DEFAULT, Google OAuth TETAP
+SEPENUHNYA ADA dan berfungsi di kode, dikontrol lewat toggle runtime
+(`app_settings.google_oauth_enabled`), bukan dihapus/di-hardcode mati.
+
+- [x] Migration `000011` — `users.username`/`password_hash` (nullable,
+      keduanya), tabel baru `app_settings` (key-value: `google_oauth_
+      enabled`, `maintenance_mode`, `app_name`, `default_language`, semua
+      di-seed `false`/default)
+- [x] `infrastructure/passwordhash` — bcrypt cost 12, dipakai konsisten
+      oleh `cmd/seed-owner`, "Add User", dan verifikasi login
+- [x] `GET /auth/config` (public) — `{google_oauth_enabled, app_name}`,
+      dipakai halaman Login (user & admin) buat tahu tombol apa yang
+      ditampilkan SEBELUM ada token sama sekali
+- [x] `POST /auth/login` (username+password, role member) dan `POST
+      /auth/login/admin` (email+password, HARUS role owner) — dipisah
+      eksplisit, keduanya rate-limited 5/menit/IP (lebih ketat dari
+      limiter global 300/menit Sprint 12)
+- [x] `GET/POST /auth/google*` TETAP terdaftar dan jalan penuh — yang
+      baru: keduanya cek `app_settings.google_oauth_enabled` di awal
+      handler, balas 403 kalau `false` (defense-in-depth server-side,
+      bukan cuma tombol disembunyikan di frontend)
+- [x] `GET/PATCH /admin/settings` (Owner only) — PATCH langsung efektif
+      real-time, tanpa restart proses
+- [x] `middleware.MaintenanceGate` — 503 untuk non-Owner di semua route
+      authenticated non-admin kalau `maintenance_mode=true`; `/auth/*`
+      dan `/admin/*` sengaja TIDAK pernah digate (Owner harus tetap bisa
+      login dan mematikannya lagi)
+- [x] `application/users.CreateWithPassword` ("Add User", ADR 0012) —
+      jalur BARU di samping `Invite` (ADR 0009) yang tetap ada untuk
+      Google. Email opsional di form — kalau kosong, backend generate
+      placeholder `username@local.invalid` (kolom `email` tetap NOT NULL
+      UNIQUE dari skema Sprint 2, sengaja tidak diubah)
+- [x] `cmd/seed-owner` — CLI manual (`go run ./cmd/seed-owner --email=...
+      --password=...`), SENGAJA bukan endpoint HTTP (endpoint bootstrap-
+      Owner adalah lubang keamanan — siapa pun yang sampai duluan ke API
+      bisa jadi Owner)
+- [x] Login (user & admin) — form kredensial SELALU tampil, tombol
+      Google cuma muncul kalau `/auth/config` bilang enabled
+- [x] Admin Settings (screens-spec #28) — toggle Google OAuth + toggle
+      Maintenance Mode + App Name + Default Language, link ke Drive
+      Manager (tidak duplikasi UI storage)
+- [x] Admin Manage Users — form "Add User" (username/password,
+      manual atau "Generate secure password" ditampilkan SEKALI dengan
+      tombol copy — cuma bcrypt hash yang pernah disimpan)
+
+Sekalian menutup gap dokumentasi dari sisipan sebelumnya: `docs/screens-
+spec.md` ternyata belum pernah benar-benar berisi spesifikasi Profile,
+Browse Library, Admin Login, dan Admin Settings (klaim "sudah saya
+update duluan" di pesan sebelumnya tidak akurat — dicek langsung, file
+tidak berubah). Ditambahkan sekarang sebagai #24–28.
+
+Diverifikasi nyata lewat curl end-to-end (BUKAN cuma baca kode): seed
+Owner asli via `cmd/seed-owner` → login `/auth/login/admin` sukses
+dengan JWT role owner asli, password salah → 401 → `GET/PATCH
+/admin/settings` → toggle `google_oauth_enabled` ke `true` → `GET
+/auth/config` langsung reflect `true` → `GET /auth/google` yang tadinya
+403 sekarang 302 (redirect asli ke Google) → revert ke `false` → `POST
+/admin/users` (Add User) bikin Member kredensial aktif langsung → login
+`/auth/login` sebagai Member itu sukses → Member coba `/auth/login/admin`
+dengan emailnya sendiri → ditolak (bukan role owner) → rate limiter
+5/menit dikonfirmasi ikut memotong di jalur baru ini juga. Playwright
+browser asli (container terpisah, jaringan Docker yang sama): halaman
+Login user & admin dikonfirmasi TIDAK menampilkan tombol Google saat
+disabled, form username/password SELALU ada, link WhatsApp ada; login
+Owner asli lewat form kredensial berhasil sampai ke dashboard admin
+(bukan Access Denied). Semua data test (Owner/Member percobaan) dihapus
+lagi setelah verifikasi, sama seperti pola sprint-sprint sebelumnya.
+
+**Catatan jujur**: verifikasi UI untuk toggle Settings dan Add User via
+klik-browser (bukan curl) sebagian terhambat oleh keterbatasan topologi
+test (container Playwright beda origin dari container dev server,
+sehingga refresh-token cookie SameSite=Lax tidak terkirim lintas
+"situs" pada navigasi halaman kedua dst) — ini artefak lingkungan test
+lokal, BUKAN bug aplikasi (di deployment asli semua di belakang satu
+domain Nginx, lihat `infrastructure/nginx/`). Logika toggle dan Add User
+itu sendiri sudah dibuktikan benar lewat curl end-to-end di atas.
+
 ### Sprint 13 (selesai)
 
 Sprint 13 (Observability & DR) selesai 100% (2026-08-05). Keputusan baru
