@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Logo } from "@/components/logo";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 
@@ -67,7 +68,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 px-6">
       <div className="text-center">
-        <div className="mx-auto mb-4 h-16 w-16 rounded-2xl bg-gradient-to-br from-accent to-primary" />
+        <Logo size={64} className="mx-auto mb-4" />
         <h1 className="text-2xl font-bold">{config?.app_name ?? "Sonora"}</h1>
         <p className="mt-2 text-sm text-text-secondary">Personal music streaming</p>
       </div>

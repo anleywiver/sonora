@@ -1,4 +1,4 @@
-import { Headphones } from "lucide-react";
+import { Logo } from "./logo";
 
 // Screens-spec #1: logo on a gradient box, pulsing radial glow behind it,
 // sequential bounce dots. Shown as the Providers loading state (session
@@ -11,9 +11,7 @@ export function SplashScreen() {
         className="absolute h-72 w-72 animate-pulse rounded-full bg-primary/30 blur-3xl"
         style={{ animationDuration: "2.5s" }}
       />
-      <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-primary">
-        <Headphones size={36} className="text-white" />
-      </div>
+      <Logo size={80} className="relative" />
       <p className="relative mt-4 text-lg font-bold">Sonora</p>
       <div className="relative mt-6 flex gap-1.5">
         {[0, 1, 2].map((i) => (

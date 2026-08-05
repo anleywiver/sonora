@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   title: "Sonora",
   description: "Personal music streaming platform",
   manifest: "/manifest.json",
+  icons: { icon: "/icon.svg" },
 };
 
 export const viewport: Viewport = {

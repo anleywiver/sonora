@@ -14,6 +14,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Sonora Admin",
   description: "Personal music streaming platform",
+  icons: { icon: "/icon.svg" },
 };
 
 export const viewport: Viewport = {

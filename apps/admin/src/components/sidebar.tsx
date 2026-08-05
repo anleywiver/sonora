@@ -4,6 +4,7 @@ import { LayoutDashboard, HardDrive, Radio, Mic2, ListChecks, BarChart3, Users, 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -23,9 +24,12 @@ export function Sidebar() {
 
   return (
     <nav className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col gap-1 border-r border-border bg-card/60 px-3 py-6 backdrop-blur-md">
-      <div className="mb-6 px-3">
-        <p className="text-lg font-bold">Sonora</p>
-        <p className="text-xs text-text-secondary">Admin</p>
+      <div className="mb-6 flex items-center gap-2.5 px-3">
+        <Logo size={32} />
+        <div>
+          <p className="text-lg font-bold leading-tight">Sonora</p>
+          <p className="text-xs text-text-secondary">Admin</p>
+        </div>
       </div>
       {items.map(({ href, icon: Icon, label }) => {
         const active = pathname === href;
