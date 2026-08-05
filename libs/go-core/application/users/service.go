@@ -7,16 +7,20 @@ package users
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 
 	"sonora.dev/go-core/domain/identity"
+	"sonora.dev/go-core/infrastructure/passwordhash"
 )
 
 var (
 	ErrEmailTaken        = errors.New("users: a user with this email already exists")
+	ErrUsernameTaken     = errors.New("users: a user with this username already exists")
 	ErrCannotRemoveOwner = errors.New("users: cannot remove an Owner's access")
 	ErrNotFound          = identity.ErrNotFound
 )
@@ -87,6 +91,65 @@ func (s *Service) Invite(ctx context.Context, email, name string) (*User, error)
 		return nil, fmt.Errorf("users: invite: %w", err)
 	}
 	return &User{ID: user.ID, Name: user.Name, Email: user.Email, Role: string(user.Role), IsPending: true, CreatedAt: user.CreatedAt.Format("2006-01-02")}, nil
+}
+
+// CreateWithPassword is the "Add User" form (Sprint 14 sisipan, ADR
+// 0012) — a credential-based Member, active immediately (no invite/
+// claim step, unlike Invite). email is optional in the form; the
+// column is still NOT NULL UNIQUE from Sprint 2, so a placeholder is
+// generated when omitted rather than forcing the Owner to invent a
+// real address for someone who'll only ever use username+password.
+func (s *Service) CreateWithPassword(ctx context.Context, username, name, password, email string) (*User, error) {
+	if _, err := s.users.FindByUsername(ctx, username); err == nil {
+		return nil, ErrUsernameTaken
+	} else if !errors.Is(err, identity.ErrNotFound) {
+		return nil, fmt.Errorf("users: check existing username: %w", err)
+	}
+
+	if email == "" {
+		email = username + "@local.invalid"
+	}
+	if _, err := s.users.FindByEmail(ctx, email); err == nil {
+		return nil, ErrEmailTaken
+	} else if !errors.Is(err, identity.ErrNotFound) {
+		return nil, fmt.Errorf("users: check existing email: %w", err)
+	}
+
+	hash, err := passwordhash.Hash(password)
+	if err != nil {
+		return nil, fmt.Errorf("users: hash password: %w", err)
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("users: generate id: %w", err)
+	}
+	if name == "" {
+		name = username
+	}
+	user := &identity.User{
+		ID:           id,
+		Email:        email,
+		Name:         name,
+		Role:         identity.RoleMember,
+		Username:     username,
+		PasswordHash: hash,
+	}
+	if err := s.users.Create(ctx, user); err != nil {
+		return nil, fmt.Errorf("users: create: %w", err)
+	}
+	return &User{ID: user.ID, Name: user.Name, Email: user.Email, Role: string(user.Role), IsPending: false, CreatedAt: user.CreatedAt.Format("2006-01-02")}, nil
+}
+
+// GeneratePassword produces a secure random password for the "Add User"
+// form's "Generate secure password" button — shown once to the Owner,
+// never stored in plain text (only the bcrypt hash is persisted).
+func GeneratePassword() (string, error) {
+	buf := make([]byte, 18)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 // RemoveAccess deletes a user's access outright. Refuses to remove an

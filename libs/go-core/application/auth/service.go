@@ -14,7 +14,14 @@ import (
 	"sonora.dev/go-core/domain/identity"
 	"sonora.dev/go-core/infrastructure/jwt"
 	"sonora.dev/go-core/infrastructure/oauth"
+	"sonora.dev/go-core/infrastructure/passwordhash"
 )
+
+// ErrInvalidCredentials is returned for both "no such user" and "wrong
+// password" — never distinguished to the caller (Sprint 14 sisipan, ADR
+// 0012), so a login attempt can't be used to enumerate valid
+// usernames/emails.
+var ErrInvalidCredentials = errors.New("auth: invalid credentials")
 
 type TokenPair struct {
 	AccessToken           string
@@ -81,6 +88,44 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code, deviceName str
 		return nil, nil, err
 	}
 
+	return s.loginWithNewDevice(ctx, user, deviceName, deviceType)
+}
+
+// LoginAdmin verifies email+password for the admin app's login (Sprint
+// 14 sisipan, ADR 0012). Deliberately separate from LoginMember: the
+// admin login endpoint refuses anyone who isn't role Owner, even if
+// their password checks out — the credential-auth equivalent of the
+// admin frontend's existing Owner-only gate (Sprint 9).
+func (s *Service) LoginAdmin(ctx context.Context, email, password, deviceName string, deviceType identity.DeviceType) (*identity.User, *TokenPair, error) {
+	user, err := s.users.FindByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, identity.ErrNotFound) {
+			return nil, nil, ErrInvalidCredentials
+		}
+		return nil, nil, err
+	}
+	if !user.IsOwner() || user.PasswordHash == "" || !passwordhash.Compare(user.PasswordHash, password) {
+		return nil, nil, ErrInvalidCredentials
+	}
+	return s.loginWithNewDevice(ctx, user, deviceName, deviceType)
+}
+
+// LoginMember verifies username+password for the main app's login.
+func (s *Service) LoginMember(ctx context.Context, username, password, deviceName string, deviceType identity.DeviceType) (*identity.User, *TokenPair, error) {
+	user, err := s.users.FindByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, identity.ErrNotFound) {
+			return nil, nil, ErrInvalidCredentials
+		}
+		return nil, nil, err
+	}
+	if user.PasswordHash == "" || !passwordhash.Compare(user.PasswordHash, password) {
+		return nil, nil, ErrInvalidCredentials
+	}
+	return s.loginWithNewDevice(ctx, user, deviceName, deviceType)
+}
+
+func (s *Service) loginWithNewDevice(ctx context.Context, user *identity.User, deviceName string, deviceType identity.DeviceType) (*identity.User, *TokenPair, error) {
 	deviceID, err := uuid.NewV7()
 	if err != nil {
 		return nil, nil, fmt.Errorf("auth: generate device id: %w", err)
