@@ -13,7 +13,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {children}
+      {/* App ini didesain mobile-first (docs/design-system.md) — di layar
+          lebar (desktop/tablet), konten dikunci ke lebar mobile (max-w-md,
+          sama seperti BottomNav/MiniPlayer di bawah) dan di-center, bukan
+          diregangkan penuh selebar viewport. Di dalam kolom ini tetap
+          responsive penuh mengikuti breakpoint Tailwind biasa. */}
+      <div className="relative mx-auto min-h-screen w-full max-w-md sm:border-x sm:border-border">
+        {children}
+      </div>
       {showShell && (
         <>
           <MiniPlayer />
