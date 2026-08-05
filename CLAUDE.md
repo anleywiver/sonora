@@ -141,6 +141,26 @@ ini untuk lyrics provider stats), dan `ingest_jobs_status_check` TETAP
 pakai `'processing'` (bukan diganti `'running'` seperti diminta) supaya
 tidak merusak `MarkIngestJobProcessing` yang sudah dipakai sejak Sprint 3.
 
+**Sisipan lanjutan — Admin Manage Users** (ADR 0009): tidak ada endpoint
+`/admin/users*` sama sekali sebelumnya (migration `000009` — `users.google_id`
+jadi nullable). "Invite" TIDAK kirim email beneran (tidak ada infrastruktur
+email di project ini) — bikin baris user dengan `google_id = NULL`
+("pending"), otomatis "diklaim" (`google_id`/`name`/`avatar_url` diisi)
+begitu email itu berhasil login lewat Google pertama kali —
+`HandleGoogleCallback` (Sprint 2) sekarang cek email pending SEBELUM jalur
+first-user-jadi-owner yang lama. `google_id = NULL` (bukan string kosong)
+supaya unique index tetap izinkan banyak invite pending sekaligus.
+
+Diverifikasi nyata: invite → cek DB `google_id IS NULL` untuk row itu →
+invite email yang sama lagi → 409 (bukan duplikat) → hapus akses Owner →
+403 (ditolak) → hapus akses Member → 200 → hapus lagi → 404. Dua invite
+BERBEDA sekaligus dibuktikan TIDAK bentrok di unique index (`google_id`
+NULL ganda, bukan `''` ganda). Mekanisme klaim disimulasikan langsung di
+DB (isi `google_id` manual) → status API benar berubah dari "invited" ke
+"active" — jalur HTTP OAuth callback penuh sendiri belum bisa dites tanpa
+`GOOGLE_CLIENT_ID`/`SECRET` asli, sama seperti semua fitur Google lain di
+project ini.
+
 ### Sprint 13 (selesai)
 
 Sprint 13 (Observability & DR) selesai 100% (2026-08-05). Keputusan baru

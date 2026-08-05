@@ -62,7 +62,9 @@ func (s *Service) GoogleAuthURL(state string) string {
 
 // HandleGoogleCallback finds-or-creates the user, records a new device for
 // this session, and issues a fresh token pair. The very first user ever
-// created becomes Owner; everyone after is Member.
+// created becomes Owner; everyone after is Member — UNLESS this email was
+// already invited (ADR 0009, Sprint 14 sisipan), in which case that
+// pending row is claimed instead of creating a second user.
 func (s *Service) HandleGoogleCallback(ctx context.Context, code, deviceName string, deviceType identity.DeviceType) (*identity.User, *TokenPair, error) {
 	profile, err := s.google.Exchange(ctx, code)
 	if err != nil {
@@ -71,7 +73,7 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code, deviceName str
 
 	user, err := s.users.FindByGoogleID(ctx, profile.Sub)
 	if errors.Is(err, identity.ErrNotFound) {
-		user, err = s.createUser(ctx, profile)
+		user, err = s.claimInviteOrCreate(ctx, profile)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -98,6 +100,25 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code, deviceName str
 		return nil, nil, err
 	}
 	return user, pair, nil
+}
+
+// claimInviteOrCreate checks for a pending invite (ADR 0009) by email
+// before falling back to the normal first-user-is-owner creation path.
+func (s *Service) claimInviteOrCreate(ctx context.Context, profile *oauth.GoogleProfile) (*identity.User, error) {
+	pending, err := s.users.FindByEmail(ctx, profile.Email)
+	if err == nil && pending.IsPending() {
+		if err := s.users.ClaimInvite(ctx, pending.ID, profile.Sub, profile.Name, profile.Picture); err != nil {
+			return nil, fmt.Errorf("auth: claim invite: %w", err)
+		}
+		pending.GoogleID = profile.Sub
+		pending.Name = profile.Name
+		pending.AvatarURL = profile.Picture
+		return pending, nil
+	}
+	if err != nil && !errors.Is(err, identity.ErrNotFound) {
+		return nil, err
+	}
+	return s.createUser(ctx, profile)
 }
 
 func (s *Service) createUser(ctx context.Context, profile *oauth.GoogleProfile) (*identity.User, error) {

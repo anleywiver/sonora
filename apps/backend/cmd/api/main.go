@@ -29,6 +29,7 @@ import (
 	appqueue "sonora.dev/go-core/application/queue"
 	appsearch "sonora.dev/go-core/application/search"
 	appstorage "sonora.dev/go-core/application/storageaccount"
+	appusers "sonora.dev/go-core/application/users"
 	"sonora.dev/go-core/config"
 	"sonora.dev/go-core/domain/identity"
 	"sonora.dev/go-core/infrastructure/crypto"
@@ -119,6 +120,9 @@ func main() {
 
 	ingestFilterService := appingestfilter.NewService(queries)
 	ingestFilterHandler := handlers.NewIngestFilterHandler(ingestFilterService)
+
+	usersService := appusers.NewService(userRepo)
+	usersHandler := handlers.NewUsersHandler(usersService)
 
 	catalogService := appcatalog.NewService(queries, credentialsBox, cfg.JWTAccessSecret, cfg.GoogleClientID, cfg.GoogleClientSecret)
 	catalogHandler := handlers.NewCatalogHandler(catalogService)
@@ -233,6 +237,9 @@ func main() {
 	adminGroup.Get("/ingest-sources/:source_type/filters", ingestFilterHandler.List)
 	adminGroup.Post("/ingest-sources/:source_type/filters", ingestFilterHandler.Create)
 	adminGroup.Delete("/ingest-sources/:source_type/filters/:id", ingestFilterHandler.Delete)
+	adminGroup.Get("/users", usersHandler.List)
+	adminGroup.Post("/users/invite", usersHandler.Invite)
+	adminGroup.Delete("/users/:id", usersHandler.Delete)
 
 	api.Get("/songs/:id", requireAuth, catalogHandler.GetSong)
 	api.Post("/songs/:id/stream-token", requireAuth, catalogHandler.StreamToken)

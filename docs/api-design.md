@@ -100,4 +100,6 @@ Base URL: `https://api.sonora.local/api/v1` (dev) — semua endpoint di bawah re
 | GET/POST | `/admin/jobs`, `/admin/jobs/:id/retry` |
 | GET/PATCH | `/admin/lyrics-providers[/:id]` |
 | GET | `/admin/analytics/top-played`, `/admin/analytics/storage-growth` |
-| GET/POST/DELETE | `/admin/users`, `/admin/users/invite`, `/admin/users/:id` |
+| GET | `/admin/users` |
+| POST | `/admin/users/invite` (Sprint 14 sisipan, ADR 0009 — tidak kirim email, lihat catatan) |
+| DELETE | `/admin/users/:id` (403 kalau target Owner) |

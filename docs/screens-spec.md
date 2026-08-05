@@ -54,6 +54,12 @@ Semua halaman **mobile-first**, dark mode only.
 
 **21. Analytics** — Storage Growth (bar chart 6 bulan), Download Trend + Most Played (2 kolom kecil berdampingan).
 
+## Tambahan Screen (sisipan Sprint 14, atas permintaan user)
+
+**22. Users** — Table (Nama, Email, Role, Status, Join date), tombol "Invite Member" (modal input email), tombol hapus akses per Member (tidak ada untuk Owner). "Invite" TIDAK kirim email beneran (tidak ada infrastruktur email di project ini) — baris user dibuat dengan status "Invited", otomatis jadi "Active" begitu email itu login lewat Google pertama kali (lihat ADR 0009).
+
+**23. Songs** — Table semua lagu (judul, artist, album, durasi, storage provider, tanggal ditambahkan), search/filter by judul/artist, tombol edit metadata (title/artist/album/genre), tombol hapus (soft delete + konfirmasi).
+
 ## Interaksi Wajib (semua halaman)
 
 - Page transition: fade + slight scale (Framer Motion)

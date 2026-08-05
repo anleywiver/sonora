@@ -17,8 +17,12 @@ const (
 )
 
 type User struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey"`
-	GoogleID  string    `gorm:"column:google_id;uniqueIndex;not null"`
+	ID uuid.UUID `gorm:"type:uuid;primaryKey"`
+	// GoogleID is nullable (Sprint 14 sisipan, ADR 0009) — NULL means
+	// "invited but never logged in yet", claimed (filled in) on first
+	// real Google login. NULL rather than "" so the unique index allows
+	// any number of pending invites without colliding.
+	GoogleID  *string   `gorm:"column:google_id;uniqueIndex"`
 	Email     string    `gorm:"uniqueIndex;not null"`
 	Name      string    `gorm:"not null"`
 	AvatarURL string    `gorm:"column:avatar_url"`
