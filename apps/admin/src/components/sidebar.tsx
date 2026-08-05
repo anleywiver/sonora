@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, HardDrive, Radio, Mic2, ListChecks, BarChart3, Users, Music } from "lucide-react";
+import { LayoutDashboard, HardDrive, Radio, Mic2, ListChecks, BarChart3, Users, Music, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -15,6 +15,7 @@ const items = [
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
   { href: "/users", icon: Users, label: "Users" },
   { href: "/songs", icon: Music, label: "Songs" },
+  { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export function Sidebar() {

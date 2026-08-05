@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiFetch, ApiError } from "@/lib/api";
@@ -25,6 +25,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
 
   function load() {
@@ -58,13 +59,22 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="mt-1 text-sm text-text-secondary">Kelola akses Owner &amp; Member.</p>
         </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="flex items-center gap-2 rounded-control bg-primary px-4 py-2.5 text-sm font-semibold"
-        >
-          <Plus size={16} />
-          Invite Member
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAddUser(true)}
+            className="flex items-center gap-2 rounded-control border border-border px-4 py-2.5 text-sm font-semibold"
+          >
+            <Plus size={16} />
+            Add User
+          </button>
+          <button
+            onClick={() => setShowInvite(true)}
+            className="flex items-center gap-2 rounded-control bg-primary px-4 py-2.5 text-sm font-semibold"
+          >
+            <Plus size={16} />
+            Invite Member
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -80,6 +90,14 @@ export default function UsersPage() {
             setUsers((prev) => [...prev, user]);
             setShowInvite(false);
           }}
+          onError={setError}
+        />
+      )}
+
+      {showAddUser && (
+        <AddUserModal
+          onClose={() => setShowAddUser(false)}
+          onCreated={(user) => setUsers((prev) => [...prev, user])}
           onError={setError}
         />
       )}
@@ -203,6 +221,145 @@ function InviteModal({
             className="flex-1 rounded-control bg-primary px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >
             {submitting ? "Mengundang…" : "Invite"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// Sprint 14 sisipan (ADR 0012) — credential-based Member creation,
+// active immediately (no invite/claim step, unlike InviteModal above).
+// The generated password is shown exactly once with a copy button —
+// only the bcrypt hash is ever persisted, so this is the Owner's only
+// chance to see/copy it.
+function AddUserModal({
+  onClose,
+  onCreated,
+  onError,
+}: {
+  onClose: () => void;
+  onCreated: (user: AdminUser) => void;
+  onError: (msg: string) => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [created, setCreated] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function generatePassword() {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    const generated = btoa(String.fromCharCode(...bytes))
+      .replace(/\+/g, "A")
+      .replace(/\//g, "B")
+      .replace(/=/g, "");
+    setPassword(generated);
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    apiFetch<AdminUser>("/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, name, password }),
+    })
+      .then((user) => {
+        onCreated(user);
+        setCreated(true);
+      })
+      .catch((e) => onError(e instanceof ApiError ? e.message : "Failed to create user"))
+      .finally(() => setSubmitting(false));
+  }
+
+  if (created) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <div className="w-full max-w-sm rounded-card border border-border bg-card p-5">
+          <h2 className="text-sm font-semibold">User dibuat</h2>
+          <p className="mt-1 text-xs text-text-secondary">
+            Catat password ini sekarang — hanya ditampilkan sekali, tidak bisa dilihat lagi setelah ini.
+          </p>
+          <div className="mt-4 flex items-center gap-2 rounded-control border border-border bg-background px-3 py-2">
+            <code className="flex-1 truncate text-sm">{password}</code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(password);
+                setCopied(true);
+              }}
+              className="flex items-center gap-1 text-xs text-hover"
+            >
+              <Copy size={13} />
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            className="mt-4 w-full rounded-control bg-primary px-4 py-2 text-sm font-semibold"
+          >
+            Selesai
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-card border border-border bg-card p-5">
+        <h2 className="text-sm font-semibold">Add User</h2>
+        <p className="mt-1 text-xs text-text-secondary">
+          Member kredensial (username/password), aktif langsung — tanpa perlu klaim lewat Google.
+        </p>
+        <input
+          required
+          placeholder="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          className="mt-4 w-full rounded-control border border-border bg-background px-3 py-2 text-sm"
+        />
+        <input
+          placeholder="Nama (opsional)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="mt-3 w-full rounded-control border border-border bg-background px-3 py-2 text-sm"
+        />
+        <div className="mt-3 flex gap-2">
+          <input
+            required
+            minLength={8}
+            type="text"
+            placeholder="Password (min. 8 karakter)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="flex-1 rounded-control border border-border bg-background px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={generatePassword}
+            className="flex-shrink-0 rounded-control border border-border px-3 py-2 text-xs text-text-secondary"
+          >
+            Generate
+          </button>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-control border border-border px-4 py-2 text-sm font-medium text-text-secondary"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex-1 rounded-control bg-primary px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            {submitting ? "Membuat…" : "Add User"}
           </button>
         </div>
       </form>
