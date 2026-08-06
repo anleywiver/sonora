@@ -1147,3 +1147,365 @@ Tidak ada lagi halaman yang boleh diimplementasi tanpa rujukan literal di
 dokumen ini. Kalau nanti ada halaman baru di luar 25 ini, TULIS dulu
 spec-nya di sini (minta ke user/Claude arsitek) sebelum coding, jangan
 improvisasi.
+
+---
+
+## 10. UPDATE TYPOGRAPHY — ganti font, perbaiki kesan "kaku"
+
+Font lama (Inter) diganti **Plus Jakarta Sans** — alternatif gratis/legal
+dengan karakter geometris-ramah mirip Spotify Circular (yang berlisensi,
+tidak bisa kita pakai).
+
+```tsx
+// apps/frontend/src/app/layout.tsx dan apps/admin/src/app/layout.tsx
+import { Plus_Jakarta_Sans } from "next/font/google";
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+```
+Update `tailwind.config.ts`: `fontFamily.sans: ["var(--font-jakarta)", "sans-serif"]`
+
+**Perbaiki juga distribusi weight** — ini penyebab kesan "kaku" yang
+sebenarnya, bukan cuma soal font:
+- JANGAN pakai `font-bold` (700) di banyak tempat sekaligus. Batasi HANYA
+  untuk: judul halaman (Header h1), judul lagu di Now Playing/Song Detail,
+  angka besar di Dashboard admin.
+- Body text, label, nama lagu di list/card → `font-medium` (500) atau
+  `font-semibold` (600), BUKAN `font-bold`.
+- Tambahkan `tracking-tight` (letter-spacing sedikit rapat) khusus di
+  heading besar (`text-lg`, `text-xl`) — ini yang bikin judul terasa
+  "dirancang", bukan default browser.
+
+## 11. DEFAULT ARTWORK & AVATAR — fallback deterministik, bukan generik
+
+Sekarang semua placeholder artwork pakai gradient SAMA (accent→primary)
+di semua tempat — makanya kesan "belum jadi/asal". Ganti jadi
+**deterministik per item** (setiap lagu/album/artist dapat warna beda
+tapi KONSISTEN, bukan acak tiap reload) + icon kecil di tengah.
+
+```tsx
+// lib/utils/defaultArtwork.ts
+const GRADIENT_PALETTE = [
+  "from-accent to-primary",
+  "from-hover to-primary",
+  "from-secondary to-background",
+  "from-primary to-card",
+  "from-hover to-secondary",
+  "from-accent to-card",
+];
+
+export function getDeterministicGradient(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return GRADIENT_PALETTE[Math.abs(hash) % GRADIENT_PALETTE.length];
+}
+```
+
+Pemakaian (seed = id item, supaya konsisten selamanya untuk item yang sama):
+
+```tsx
+// Song/Album artwork placeholder
+<div className={`w-full aspect-square rounded-xl bg-gradient-to-br ${getDeterministicGradient(song.id)} flex items-center justify-center`}>
+  {!song.artworkUrl && <Music2Icon className="w-6 h-6 text-white/40" />}
+</div>
+
+// Album placeholder — icon beda
+{!album.coverUrl && <DiscIcon className="w-6 h-6 text-white/40" />}
+
+// Artist — TETAP bulat (rounded-full), bukan icon, karena manusia
+<div className={`rounded-full bg-gradient-to-br ${getDeterministicGradient(artist.id)} flex items-center justify-center text-white font-bold`}>
+  {!artist.avatarUrl && artist.name.charAt(0).toUpperCase()}
+</div>
+
+// User avatar — sama pola dengan artist (inisial + gradient deterministik)
+<div className={`rounded-full bg-gradient-to-br ${getDeterministicGradient(user.id)} flex items-center justify-center text-white font-bold`}>
+  {!user.avatarUrl && user.name.charAt(0).toUpperCase()}
+</div>
+```
+
+Terapkan fallback ini ke SEMUA tempat artwork/avatar muncul — Home,
+Search, Library, Playlist, Song Detail, Now Playing, Manage Songs (admin),
+Manage Users (admin), Mini Player, Queue. Jangan ada satupun tempat yang
+masih pakai gradient generik sama semua.
+
+## 12. DOWNLOADS — rebuild penuh, ini sebelumnya belum benar-benar berfungsi
+
+Masalah yang harus diperbaiki (bukan cuma tampilan, fungsinya juga):
+
+1. **Cek dulu apakah tombol Download di Song Detail/Now Playing benar-
+   benar memicu proses** — download harus: fetch audio file (via
+   `/songs/:id/stream` dengan token), simpan ke **Cache API browser**
+   (`caches.open('sonora-offline-v1')`), progress tracking real (pakai
+   `ReadableStream` dari response body, hitung persen dari
+   `Content-Length` vs bytes yang sudah diterima) — BUKAN progress dummy/
+   fake timer.
+2. **Cek quota storage device SEBELUM download** — panggil
+   `navigator.storage.estimate()`, kalau `usage + fileSize > quota`,
+   tolak download dengan pesan jelas "Storage penuh, hapus beberapa lagu
+   dulu" — jangan biarkan gagal diam-diam.
+3. **State download harus persisten** — simpan status per lagu (downloading/
+   completed/failed) di IndexedDB (bukan cuma React state yang hilang
+   kalau refresh), supaya kalau user tutup app di tengah download, waktu
+   dibuka lagi statusnya tetap akurat.
+4. **Tombol hapus per lagu terdownload** — harus benar-benar hapus dari
+   Cache API (`cache.delete()`) DAN update IndexedDB, bukan cuma hilang
+   dari UI doang.
+5. **Retry untuk yang failed** — re-trigger proses nomor 1 dari awal.
+
+Kalau ternyata SELAMA INI fitur download di frontend cuma UI kosong tanpa
+logic sama sekali (kemungkinan besar, sesuai dugaan kamu "seperti belum
+selesai"), BANGUN DARI NOL sesuai 5 poin di atas — jangan cuma poles
+tampilan doang.
+
+## 13. ADMIN — Lyrics Editor (baru, dari Manage Songs)
+
+Di halaman Manage Songs (8.5... rujuk detail halaman itu), tambahkan
+1 icon action baru di kolom Action tiap baris: `MicIcon` ("Lihat/Edit
+Lyrics"), di samping icon edit dan delete yang sudah ada.
+
+Klik → buka halaman baru `apps/admin/src/app/songs/[id]/lyrics/page.tsx`:
+
+```tsx
+<h1 className="text-white text-[15px] font-bold mb-1">Edit Lyrics — {songTitle}</h1>
+<p className="text-text-secondary text-[11px] mb-4">{artistName} · {duration}</p>
+
+{/* Audio player kecil untuk preview sambil edit */}
+<div className="bg-card rounded-xl p-3 flex items-center gap-2.5 mb-4">
+  <button onClick={togglePlay}><PlayIcon className="w-4 h-4 text-white" /></button>
+  <div className="flex-1 h-1 bg-white/10 rounded-full"><div className="h-full bg-accent rounded-full" style={{width: `${progress}%`}} /></div>
+  <span className="text-text-secondary text-[10px]">{currentTime}</span>
+</div>
+
+{/* Editor per baris — timestamp + text, bisa reorder/tambah/hapus baris */}
+<div className="bg-card rounded-2xl p-4">
+  {lines.map((line, i) => (
+    <div key={line.id} className="flex items-center gap-2 mb-2">
+      <input
+        value={line.timestamp}
+        onChange={e => updateTimestamp(line.id, e.target.value)}
+        placeholder="00:12.5"
+        className="w-20 bg-white/5 border border-white/[0.06] rounded-lg px-2 py-1.5 text-white text-[11px] font-mono flex-shrink-0"
+      />
+      <button onClick={() => setLineTimestampFromCurrentAudioTime(line.id)} title="Set dari posisi audio sekarang">
+        <ClockIcon className="w-3.5 h-3.5 text-hover flex-shrink-0" />
+      </button>
+      <input
+        value={line.text}
+        onChange={e => updateText(line.id, e.target.value)}
+        className="flex-1 bg-white/5 border border-white/[0.06] rounded-lg px-3 py-1.5 text-white text-xs"
+      />
+      <button onClick={() => deleteLine(line.id)}><XIcon className="w-3.5 h-3.5 text-[#F87171] flex-shrink-0" /></button>
+    </div>
+  ))}
+  <button onClick={addLine} className="text-hover text-[11px] font-semibold mt-2">+ Tambah baris</button>
+</div>
+
+<button onClick={handleSave} className="bg-primary text-white rounded-2xl px-6 py-3 font-semibold text-sm mt-4">
+  Simpan perubahan
+</button>
+```
+
+Fitur kunci:
+- **Tombol jam (⏱) di tiap baris** — klik saat audio sedang preview
+  jalan, otomatis isi timestamp baris itu dengan posisi audio SEKARANG
+  (`currentTime` dari audio element). Ini cara paling praktis buat sinkron
+  manual tanpa hitung manual.
+- Format timestamp: `MM:SS.ms` (contoh `01:23.5`)
+- Simpan → `PATCH /admin/songs/:id/lyrics` dengan body array `{timestamp,
+  text}[]`, backend generate ulang `synced_lrc` (format LRC standar) dari
+  array itu, update kolom `lyrics.synced_lrc`.
+
+Endpoint baru:
+- `GET /admin/songs/:id/lyrics` — return lyrics existing (parse dari
+  synced_lrc jadi array {timestamp, text} untuk ditampilkan di editor)
+- `PATCH /admin/songs/:id/lyrics` — simpan perubahan
+
+## 14. ADMIN — Categories: pola checklist untuk list besar vs kecil
+
+**Genres & Moods** (~20-30 item, muat 1 layar dengan scroll wajar) —
+pakai pola list biasa dengan toggle switch per baris (sama seperti
+Bagian 8.3 pattern sebelumnya):
+
+```tsx
+{genres.map(g => (
+  <div key={g.id} className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+    <span className="text-white text-xs">{g.name}</span>
+    <ToggleSwitch checked={g.isActive} onChange={() => toggleGenre(g.id)} />
+  </div>
+))}
+<button className="text-hover text-[11px] font-semibold mt-2">+ Tambah genre baru</button>
+```
+
+**Countries** (~195 item, TERLALU BANYAK untuk toggle satu-satu) — WAJIB
+pakai pola search + checklist massal:
+
+```tsx
+<div className="mb-3">
+  <SearchBar placeholder="Cari negara..." value={search} onChange={setSearch} />
+</div>
+<div className="flex items-center justify-between mb-3">
+  <span className="text-text-secondary text-[11px]">{activeCount} dari {totalCount} negara aktif</span>
+  <div className="flex gap-2">
+    <button onClick={selectAll} className="text-hover text-[11px] font-semibold">Pilih semua</button>
+    <button onClick={selectNone} className="text-hover text-[11px] font-semibold">Kosongkan</button>
+  </div>
+</div>
+<div className="max-h-[400px] overflow-y-auto">
+  {filteredCountries.map(c => (
+    <label key={c.code} className="flex items-center gap-2.5 py-1.5 cursor-pointer">
+      <input type="checkbox" checked={c.isActive} onChange={() => toggleCountry(c.code)}
+        className="w-4 h-4 rounded accent-primary" />
+      <span className="text-white text-xs">{c.name}</span>
+      <span className="text-text-secondary text-[10px]">({c.code})</span>
+    </label>
+  ))}
+</div>
+<button className="bg-primary text-white rounded-xl px-5 py-2.5 text-xs font-semibold mt-3">
+  Simpan perubahan
+</button>
+```
+
+Checklist country TIDAK langsung PATCH per klik (beda dari genre/mood
+toggle yang langsung save) — kumpulkan perubahan dulu di state lokal,
+baru kirim SEKALIGUS lewat tombol "Simpan perubahan" (`PATCH
+/admin/countries/bulk` dengan body `{ active_codes: string[] }`) — supaya
+tidak kirim 195 request terpisah kalau admin centang banyak sekaligus.
+
+## 15. Seed Countries — via Go seed script, bukan SQL manual
+
+Buat `apps/backend/cmd/seed-countries/main.go`, pakai package Go yang
+sudah punya data ISO 3166-1 lengkap (contoh: `github.com/biter777/countries`),
+loop semua negara, insert ke tabel `countries` (code, name), default
+`is_active = true` untuk SEMUA (admin yang nanti nonaktifkan yang tidak
+relevan, bukan mulai dari kosong).
+
+Dijalankan sekali manual: `go run ./cmd/seed-countries`
+
+## 16. Migrasi data lama: albums.genre (text) → albums.genre_id (FK)
+
+Untuk 2 lagu sample yang sudah ada (Incoherent, U TERU S...), cocokkan
+`albums.genre` (text lama) ke `genres.name` yang paling mendekati
+(case-insensitive match). Kalau tidak ada yang cocok persis, biarkan
+`genre_id` NULL, JANGAN buat genre baru otomatis dari data lama (supaya
+master data tetap terkurasi, konsisten dengan aturan di Bagian 3
+sebelumnya). Tulis 1 script migrasi data sekali-jalan untuk ini, bukan
+logic permanen di aplikasi.
+
+## 17. FIX — Lyrics Editor: tombol Generate Otomatis
+
+Di halaman Lyrics Editor (Bagian 13), tambahkan tombol baru di atas area
+editor, sebelum list baris kosong:
+
+```tsx
+<div className="flex items-center justify-between mb-3">
+  <p className="text-white text-xs font-semibold">Lyrics lines</p>
+  <button onClick={handleAutoGenerate} disabled={isGenerating}
+    className="bg-accent/10 text-accent border border-accent/30 rounded-xl px-3 py-1.5 text-[11px] font-semibold flex items-center gap-1.5">
+    <SparklesIcon className="w-3.5 h-3.5" />
+    {isGenerating ? "Mencari..." : "Generate Otomatis"}
+  </button>
+</div>
+```
+
+Endpoint baru: `POST /admin/songs/:id/lyrics/fetch` — re-trigger pencarian
+lyrics ke LRCLIB pakai `songs.title` + `artists.name` TERKINI (bukan data
+lama saat ingest pertama kali — penting kalau title/artist sudah dikoreksi
+manual sejak itu). Response: `{ found: boolean, lines: [...] }`.
+
+Kalau `found: false`, tampilkan pesan jelas: "Tidak ditemukan di LRCLIB
+untuk '{title}' oleh '{artist}'. Coba perbaiki judul/artist dulu di
+halaman edit lagu, atau tambahkan baris manual di bawah."
+
+## 18. FIX — Duplikat icon "+" di tombol Add Song
+
+Bug di tombol "+ Add Song" — kemungkinan besar ada 2 sumber "+" sekaligus
+(icon PlusIcon DAN karakter "+" literal di teks). Cek kode tombolnya,
+harus PERSIS salah satu saja:
+
+```tsx
+// BENAR — cuma 1 sumber "+"
+<button className="bg-primary text-white px-4 py-2 rounded-[10px] text-[11px] font-semibold flex items-center gap-1.5">
+  <PlusIcon className="w-3.5 h-3.5" /> Add Song
+</button>
+```
+Bukan `<PlusIcon /> + Add Song` (icon DAN teks "+" sekaligus — itu yang
+bikin dobel).
+
+## 19. REBUILD — Add Song flow: analyze dulu, baru review dengan fallback manual
+
+Alur SEKARANG (upload → langsung tersimpan apa adanya) diganti jadi
+3 tahap:
+
+**Tahap 1 — Upload file**
+Modal sederhana, cuma file picker + tombol "Analisa".
+
+**Tahap 2 — Review hasil analisa (WAJIB, jangan skip)**
+Setelah backend selesai extract ID3 tag + cari genre/mood, tampilkan form
+review SEBELUM benar-benar disimpan ke katalog:
+
+```tsx
+<div className="space-y-3">
+  {/* Tiap field: kalau terdeteksi, tampilkan value + badge "Terdeteksi".
+      Kalau TIDAK terdeteksi, tampilkan input KOSONG + border warna
+      warning + label "Tidak terdeteksi, isi manual" */}
+
+  <FieldReview
+    label="Judul"
+    value={detected.title}
+    isDetected={!!detected.title}
+    onChange={setTitleManual}
+  />
+  <FieldReview
+    label="Artist"
+    value={detected.artist}
+    isDetected={!!detected.artist}
+    onChange={setArtistManual}
+  />
+  <FieldReview label="Genre" isDetected={!!detected.genreId} type="select" options={genres} />
+  <FieldReview label="Tahun rilis" isDetected={!!detected.year} type="number" />
+  <FieldReview label="Negara" isDetected={!!detected.countryCode} type="select" options={countries} />
+  {/* Artwork preview kalau ada embedded, atau upload manual kalau tidak */}
+</div>
+
+<button onClick={handleConfirmSave} className="bg-primary text-white rounded-2xl px-6 py-3 font-semibold text-sm w-full mt-4">
+  Simpan ke katalog
+</button>
+```
+
+`FieldReview` component: kalau `isDetected=false`, tambahkan
+`border-[#FACC15]/40` (kuning warning) di input-nya + teks kecil di bawah
+"⚠ Tidak terdeteksi dari file, isi manual" — supaya admin SADAR field mana
+yang perlu dicek, bukan diam-diam kosong.
+
+**Tahap 3 — Simpan**
+Baru setelah admin klik "Simpan ke katalog", data (termasuk koreksi
+manual) benar-benar masuk ke `songs` table DAN baru di titik ini trigger
+proses lyrics fetch (Bagian 20) — supaya title/artist yang dipakai untuk
+cari lyrics adalah yang SUDAH DIKOREKSI, bukan hasil ekstraksi mentah
+yang mungkin salah.
+
+## 20. FIX — Auto-lyrics tidak jalan saat upload baru
+
+Investigasi WAJIB sebelum benerin:
+1. Cek ingest_job_logs untuk upload terbaru — apakah step "fetch_lyrics"
+   BENAR-BENAR dijalankan (ada log entry-nya) atau ter-skip total?
+2. Kalau step-nya jalan tapi hasilnya kosong — cek query yang dikirim ke
+   LRCLIB, apakah pakai title/artist bersih atau nama file mentah? (Ini
+   kemungkinan besar akar masalahnya berdasarkan kasus ST12 di
+   screenshot — title-nya "Unknown Artist" berarti query ke LRCLIB
+   kemungkinan juga kacau)
+3. Laporkan temuan pasti ke saya sebelum lanjut fix
+
+Perbaikan yang PALING PENTING: pastikan step fetch_lyrics dipanggil
+SETELAH Tahap 3 di Bagian 19 (setelah admin konfirmasi/koreksi title-
+artist), BUKAN langsung setelah ID3 extraction mentah. Kalau title masih
+"Unknown"/kosong di titik fetch lyrics dipanggil, SKIP pencarian dan
+langsung set status "lyrics tidak ditemukan" (jangan buang waktu search
+dengan query yang pasti gagal) — biarkan admin trigger manual lewat
+tombol "Generate Otomatis" (Bagian 17) setelah title diperbaiki.
